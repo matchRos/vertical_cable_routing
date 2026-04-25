@@ -15,8 +15,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 from PyQt5.QtWidgets import QApplication
 
 from cable_orchestrator.default_pipeline import build_default_orchestrator
-from cable_routing.debug_gui.pipeline.runner import StepRunner
-from cable_routing.debug_gui.pipeline.state import PipelineState
+from cable_orchestrator.pipeline_state import PipelineState
+from cable_orchestrator.step_runner import StepRunner
 from cable_studio.gui_controller import GuiController
 from cable_studio.main_window import MainWindow
 

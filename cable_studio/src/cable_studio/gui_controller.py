@@ -5,7 +5,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 
 from cable_perception.tracing_service import TracingService
-from cable_routing.debug_gui.backend.cable_trace_io import CableTraceIO
+
+from .cable_trace_io import CableTraceIO
 
 
 class GuiController:
@@ -245,13 +246,13 @@ class GuiController:
         path = self.window.ask_save_trace_path()
         if not path:
             return
-        self.trace_io.save(path, self.state.world_path)
+        self.trace_io.save_csv(path, self.state.world_path)
         self._append_log(f"Saved cable trace to: {path}")
 
     def on_load_trace(self) -> None:
         path = self.window.ask_load_trace_path()
         if not path:
             return
-        world_path = self.trace_io.load(path)
+        world_path = self.trace_io.load_csv(path)
         self.state.world_path = world_path
         self._append_log(f"Loaded cable trace from: {path}")
