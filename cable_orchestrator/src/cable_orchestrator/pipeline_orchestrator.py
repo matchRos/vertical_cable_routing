@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable, List
 
-from cable_routing.debug_gui.pipeline.base_step import BaseStep
+from cable_orchestrator.base_step import BaseStep
 
 from .action_step import ActionStep
 from .base_action import BasePipelineAction

@@ -240,13 +240,13 @@ class GuiController:
         self._append_log("Pipeline reset.")
 
     def on_save_trace(self) -> None:
-        if self.state.world_path is None:
+        if self.state.path_in_world is None:
             self._append_log("No cable trace available to save.")
             return
         path = self.window.ask_save_trace_path()
         if not path:
             return
-        self.trace_io.save_csv(path, self.state.world_path)
+        self.trace_io.save_csv(path, self.state.path_in_world)
         self._append_log(f"Saved cable trace to: {path}")
 
     def on_load_trace(self) -> None:
@@ -254,5 +254,5 @@ class GuiController:
         if not path:
             return
         world_path = self.trace_io.load_csv(path)
-        self.state.world_path = world_path
+        self.state.path_in_world = world_path
         self._append_log(f"Loaded cable trace from: {path}")

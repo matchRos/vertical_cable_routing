@@ -30,6 +30,9 @@ class PipelineState:
     loaded_trace_path: Optional[str] = None
 
     grasp_preview: Optional[Dict[str, Any]] = None
+    grasps: Optional[Any] = None
+    grasp_poses: Optional[Any] = None
+    path_tangents: Optional[np.ndarray] = None
 
     robot_target_sent: bool = False
     descend_first_arm: Optional[str] = None
@@ -68,6 +71,9 @@ class PipelineState:
         self.loaded_trace_path = None
 
         self.grasp_preview = None
+        self.grasps = None
+        self.grasp_poses = None
+        self.path_tangents = None
 
         self.handover_tcp_rotation_world = None
         self.handover_carrier_tcp_world = None
