@@ -9,7 +9,14 @@ from handloom_runtime.handloom_pipeline.tracer import (
 
 class CableTracer:
     def __init__(self):
-        self.tracer = Tracer()
+        self.model_error = None
+        try:
+            self.tracer = Tracer()
+            self.backend = "model"
+        except Exception as exc:
+            self.tracer = None
+            self.model_error = str(exc)
+            self.backend = "analytic"
         self.analytic_tracer = AnalyticTracer()
 
     def convert_to_handloom_input(self, img, invert=True):
@@ -72,17 +79,27 @@ class CableTracer:
             print("Failed analytical trace")
             return None
 
-        path, status, _, _, _, _ = self.tracer.trace(
-            img_cp,
-            start_pixels,
-            endpoints=end_points,
-            path_len=200,
-            clips=clips,
-            viz=False,
-            idx=idx,
-            save_folder=save_folder,
-            raw_img=raw_img,
-        )
+        if self.tracer is None:
+            path, status = self.analytic_tracer.trace(
+                img_cp,
+                start_pixels,
+                endpoints=end_points,
+                path_len=200,
+                viz=viz,
+                idx=idx,
+            )
+        else:
+            path, status, _, _, _, _ = self.tracer.trace(
+                img_cp,
+                start_pixels,
+                endpoints=end_points,
+                path_len=200,
+                clips=clips,
+                viz=False,
+                idx=idx,
+                save_folder=save_folder,
+                raw_img=raw_img,
+            )
 
         path = np.flip(path, axis=1)
 

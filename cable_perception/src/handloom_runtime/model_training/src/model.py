@@ -13,7 +13,10 @@ from handloom_runtime.model_training.src.resnet_dilated import (
     Resnet34_Classifier,
     Resnet50_Classifier,
 )
-import segmentation_models_pytorch as smp
+try:
+    import segmentation_models_pytorch as smp
+except ImportError:
+    smp = None
 
 
 class KeypointsGauss(nn.Module):
@@ -38,6 +41,8 @@ class KeypointsGauss(nn.Module):
         elif resnet_type == "50":
             self.resnet = Resnet50_8s(channels=channels, pretrained=pretrained)
         elif resnet_type == "UNet18":
+            if smp is None:
+                raise RuntimeError("segmentation_models_pytorch is required for UNet18")
             self.resnet = smp.Unet(
                 encoder_name="resnet18",
                 encoder_weights="imagenet" if pretrained else None,
@@ -45,6 +50,8 @@ class KeypointsGauss(nn.Module):
                 classes=self.num_outputs,
             )
         elif resnet_type == "UNet34":
+            if smp is None:
+                raise RuntimeError("segmentation_models_pytorch is required for UNet34")
             self.resnet = smp.Unet(
                 encoder_name="resnet34",
                 encoder_weights="imagenet" if pretrained else None,
@@ -52,6 +59,8 @@ class KeypointsGauss(nn.Module):
                 classes=self.num_outputs,
             )
         elif resnet_type == "UNet50":
+            if smp is None:
+                raise RuntimeError("segmentation_models_pytorch is required for UNet50")
             self.resnet = smp.Unet(
                 encoder_name="resnet50",
                 encoder_weights="imagenet" if pretrained else None,
@@ -59,6 +68,8 @@ class KeypointsGauss(nn.Module):
                 classes=self.num_outputs,
             )
         elif resnet_type == "UNet101":
+            if smp is None:
+                raise RuntimeError("segmentation_models_pytorch is required for UNet101")
             self.resnet = smp.Unet(
                 encoder_name="resnet101",
                 encoder_weights="imagenet" if pretrained else None,

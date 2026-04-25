@@ -73,6 +73,7 @@ class InitEnvironmentStep(BaseStep):
 
         context = DebugContext(config=config, robot=None, camera=camera, board=board, tracer=tracer)
         context.camera_error = camera_error
+        context.tracer_error = tracer_error
         context.board_yz_calibration = load_board_yz_calibration_optional(
             getattr(config, "board_calibration_yaml", None)
         )

@@ -77,24 +77,9 @@ class TraceCableStep(BaseStep):
                 preferred_direction_xy = None
 
         if state.env.tracer is None:
-            overlay = self.tracing_service.create_no_trace_overlay(
-                image_rgb=image_rgb,
-                start_points=start_points,
-                end_points=end_points,
-                message="Tracer unavailable - showing only start/end points",
-                configured_clip_positions=configured_clip_positions,
-            )
-            state.trace_overlay = overlay
-            state.path_in_pixels = None
-            state.path_in_world = None
-            state.cable_orientations = None
-            return {
-                "image_source": image_source,
-                "trace_executed": False,
-                "reason": "tracer_unavailable",
-                "start_points": start_points,
-                "end_points": end_points,
-            }
+            tracer_error = getattr(state.env, "tracer_error", None)
+            detail = f" Tracer init error: {tracer_error}" if tracer_error else ""
+            raise RuntimeError("Tracer unavailable; cannot produce pixel path." + detail)
 
         trace_result = self.tracing_service.run_trace(
             tracer=state.env.tracer,
@@ -142,6 +127,8 @@ class TraceCableStep(BaseStep):
         return {
             "image_source": image_source,
             "trace_executed": True,
+            "tracer_backend": getattr(state.env.tracer, "backend", "unknown"),
+            "tracer_model_error": getattr(state.env.tracer, "model_error", None),
             "trace_status": str(trace_result["trace_status"]),
             "num_path_points": 0 if path_in_pixels is None else len(path_in_pixels),
             "start_points": start_points,

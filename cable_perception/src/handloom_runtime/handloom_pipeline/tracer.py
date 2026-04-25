@@ -3,8 +3,6 @@ import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import imgaug.augmenters as iaa
-from imgaug.augmentables import KeypointsOnImage
 from torchvision import transforms, utils
 from collections import OrderedDict
 from scipy import interpolate
@@ -114,16 +112,6 @@ class Tracer:
                 str(MODEL_PATH)
             )
         )  # Uncomment for bajcsy
-        augs = []
-        augs.append(
-            iaa.Resize(
-                {
-                    "height": self.trace_config.img_height,
-                    "width": self.trace_config.img_width,
-                }
-            )
-        )
-        self.real_img_transform = iaa.Sequential(augs, random_order=False)
         self.transform = transforms.Compose([transforms.ToTensor()])
         # TODO: fix
         self.x_buffer = 30
@@ -209,7 +197,18 @@ class Tracer:
             normalize = True
         if normalize:
             img = (img * 255.0).astype(np.uint8)
-        img, keypoints = self.real_img_transform(image=img, keypoints=kpts)
+
+        target_h = int(self.trace_config.img_height)
+        target_w = int(self.trace_config.img_width)
+        src_h, src_w = img.shape[:2]
+        scale_x = float(target_w) / float(src_w)
+        scale_y = float(target_h) / float(src_h)
+
+        img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
+        keypoints = np.asarray(kpts, dtype=float).reshape(-1, 2).copy()
+        keypoints[:, 0] *= scale_x
+        keypoints[:, 1] *= scale_y
+
         if normalize:
             img = (img / 255.0).astype(np.float32)
         return img, keypoints
@@ -300,13 +299,7 @@ class Tracer:
         return img, np.array(condition_pixels)[:, ::-1], top_left
 
     def get_trp_model_input(self, crop, crop_points, center_around_last=False):
-        kpts = KeypointsOnImage.from_xy_array(crop_points, shape=crop.shape)
-        img, kpts = self.call_img_transform(img=crop, kpts=kpts)
-
-        points = []
-        for k in kpts:
-            points.append([k.x, k.y])
-        points = np.array(points)
+        img, points = self.call_img_transform(img=crop, kpts=crop_points)
 
         points_in_image = []
         for i, point in enumerate(points):
@@ -808,6 +801,12 @@ class Tracer:
 
 
 class AnalyticTracer(Tracer):
+    def __init__(self) -> None:
+        self.trace_config = TRCR32_CL3_12_UNet34_B64_OS_MedleyFix_MoreReal_Sharp()
+        self.x_buffer = 30
+        self.y_buffer = 50
+        self.ep_buffer = 15
+
     def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0):
 
         img = np.where(img[:, :, :3] > 100, 255, 0).astype("uint8")
@@ -857,8 +856,14 @@ class AnalyticTracer(Tracer):
         #                                                  start_idx, self.trace_config.cond_point_dist_px,
         #                                                  img.shape, backward=False, randomize_spacing=False)
 
+        start_point_1 = np.asarray(starting_points[0], dtype=int).reshape(-1)[:2]
+        start_point_2 = np.asarray(starting_points[1], dtype=int).reshape(-1)[:2]
         spline, trace_end = simple_uncertain_trace_single.trace(
-            img, prev_pixels, None, exact_path_len=path_len, endpoints=endpoints
+            img,
+            start_point_1,
+            start_point_2,
+            exact_path_len=path_len,
+            endpoints=endpoints,
         )
 
         def _flat_pt(p):
