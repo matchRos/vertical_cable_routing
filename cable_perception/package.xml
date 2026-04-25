@@ -13,6 +13,7 @@
   <build_depend>cv_bridge</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>image_transport</build_depend>
+  <build_depend>python3-numpy</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <exec_depend>cable_core</exec_depend>
@@ -20,6 +21,7 @@
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>image_transport</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
 

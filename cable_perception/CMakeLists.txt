@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
 )
 
+catkin_python_setup()
+
 catkin_package(
   CATKIN_DEPENDS cable_core cable_msgs cv_bridge geometry_msgs image_transport rospy sensor_msgs
 )
