@@ -8,6 +8,12 @@ fallback_image_height: 800
 
 debug_image_path: "/ABSOLUTER/PFAD/ZU/DEINEM/BILD.png"
 
+camera_rgb_topic: /zedm/zed_node/left/image_rect_color
+camera_depth_topic: /zedm/zed_node/depth/depth_registered
+camera_info_topic: /zedm/zed_node/left/camera_info
+camera_require_depth: false
+camera_wait_timeout_sec: 5.0
+
 cam_to_robot_left_trans_path: config/cameras/zed_to_world_left.tf
 cam_to_robot_right_trans_path: config/cameras/zed_to_world_right.tf
 

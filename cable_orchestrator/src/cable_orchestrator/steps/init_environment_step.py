@@ -24,14 +24,20 @@ class InitEnvironmentStep(BaseStep):
         except Exception as exc:
             return None, str(exc)
 
-    def _try_create_camera(self) -> Tuple[Optional[Any], Optional[str]]:
+    def _try_create_camera(self, config: DebugConfig) -> Tuple[Optional[Any], Optional[str]]:
         try:
             import rospy
 
             if not rospy.core.is_initialized():
                 rospy.init_node("cable_studio_camera", anonymous=True, disable_signals=True)
             rospy.sleep(1.0)
-            return create_camera_subscriber(), None
+            return create_camera_subscriber(
+                topic_rgb=getattr(config, "camera_rgb_topic", None),
+                topic_depth=getattr(config, "camera_depth_topic", None),
+                topic_camera_info=getattr(config, "camera_info_topic", None),
+                require_depth=bool(getattr(config, "camera_require_depth", False)),
+                wait_timeout_sec=float(getattr(config, "camera_wait_timeout_sec", 5.0)),
+            ), None
         except Exception as exc:
             return None, str(exc)
 
@@ -62,10 +68,11 @@ class InitEnvironmentStep(BaseStep):
     def run(self, state) -> Dict[str, Any]:
         config = self._create_debug_config()
         board, board_error = self._try_create_board(config)
-        camera, camera_error = self._try_create_camera()
+        camera, camera_error = self._try_create_camera(config)
         tracer, tracer_error = self._try_create_tracer()
 
         context = DebugContext(config=config, robot=None, camera=camera, board=board, tracer=tracer)
+        context.camera_error = camera_error
         context.board_yz_calibration = load_board_yz_calibration_optional(
             getattr(config, "board_calibration_yaml", None)
         )

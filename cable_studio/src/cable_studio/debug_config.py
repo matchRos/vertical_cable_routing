@@ -99,6 +99,11 @@ class DebugConfig:
     fallback_image_width: int = 1500
     fallback_image_height: int = 800
     debug_image_path: Optional[str] = "/ABSOLUTER/PFAD/ZU/DEINEM/BILD.png"
+    camera_rgb_topic: str = "/zedm/zed_node/left/image_rect_color"
+    camera_depth_topic: str = "/zedm/zed_node/depth/depth_registered"
+    camera_info_topic: str = "/zedm/zed_node/left/camera_info"
+    camera_require_depth: bool = False
+    camera_wait_timeout_sec: float = 5.0
     trace_start_points: Tuple[Tuple[int, int], ...] = ((100, 100),)
     trace_end_points: Optional[Tuple[Tuple[int, int], ...]] = None
     trace_start_mode: str = "auto_from_config"

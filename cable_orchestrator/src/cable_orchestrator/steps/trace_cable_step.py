@@ -34,8 +34,11 @@ class TraceCableStep(BaseStep):
             fallback_image_path=state.config.debug_image_path,
         )
         if image_rgb is None:
+            camera_error = getattr(state.env, "camera_error", None)
+            detail = f" Camera init error: {camera_error}" if camera_error else ""
             raise RuntimeError(
                 "No image available. Neither camera nor debug_image_path provided a valid image."
+                + detail
             )
 
         state.rgb_image = image_rgb
