@@ -73,6 +73,9 @@ class SecondArmSideApproachStep(BaseStep):
         ry_extra = float(getattr(state.config, "second_arm_extra_world_ry_deg", 90.0))
         if abs(ry_extra) > 1e-9:
             rot = rotation_world_ry_deg(ry_extra) @ rot
+        flip_world_y = bool(getattr(state.config, "second_arm_flip_world_y_180", False))
+        if flip_world_y:
+            rot = rotation_world_ry_deg(180.0) @ rot
 
         msg_pre, _ = pose_to_msg(pos_pre, rot, config=state.config)
         self._publish_moveit(second, msg_pre)
@@ -82,8 +85,12 @@ class SecondArmSideApproachStep(BaseStep):
         self._publish_slow(second, msg_fin)
         slow_result = wait_for_cartesian_motion_result([second])
 
+        top_side_sign = 1.0 if float(np.dot(rot[:, 1], np.array([0.0, 0.0, 1.0]))) >= 0.0 else -1.0
         state.descend_second_arm = second
         state.second_arm_side_approach_done = True
+        if getattr(state, "first_route_arm_top_side_signs", None) is None:
+            state.first_route_arm_top_side_signs = {}
+        state.first_route_arm_top_side_signs[second] = top_side_sign
         return {
             "carrier_arm": carrier,
             "second_arm": second,
@@ -96,5 +103,7 @@ class SecondArmSideApproachStep(BaseStep):
             "delta_z_m": dz,
             "slow_approach_extra_y_m": float(extra_y),
             "second_arm_extra_world_ry_deg": ry_extra,
+            "second_arm_flip_world_y_180": flip_world_y,
+            "top_side_axis": ("+tool_y" if top_side_sign > 0.0 else "-tool_y"),
             "quaternion_xyzw": [float(quat[i]) for i in range(4)],
         }

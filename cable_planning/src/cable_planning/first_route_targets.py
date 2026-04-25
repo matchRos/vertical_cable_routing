@@ -9,8 +9,8 @@ from typing import Any, Dict, Tuple
 import numpy as np
 
 from cable_core.board_projection import world_from_pixel_debug
-from cable_core.clip_types import CLIP_TYPE_C_CLIP, CLIP_TYPE_PEG, CLIP_TYPE_U_CLIP
-from cable_core.motion_primitives.c_clip import build_c_clip_center_pixels, clip_forward_axis_px
+from cable_core.clip_types import CLIP_TYPE_C_CLIP, CLIP_TYPE_PEG
+from cable_core.motion_primitives.c_clip import build_c_clip_center_pixels
 from cable_core.planes import ensure_min_plane_height, get_routing_plane
 from cable_planning.pose_validation import is_dual_arm_grasp, validate_min_distance
 
@@ -33,43 +33,6 @@ def _pixel_to_world_clip(uv: np.ndarray, state: Any, arm: str) -> np.ndarray:
         is_clip=True,
         image_shape=state.rgb_image.shape,
     ).reshape(3)
-
-
-def _clip_axis_world(curr_clip: Any, state: Any, arm: str) -> np.ndarray:
-    center = np.array([float(curr_clip.x), float(curr_clip.y)], dtype=float)
-    forward_px = clip_forward_axis_px(float(curr_clip.orientation))
-    center_world = _pixel_to_world_clip(center, state, arm)
-    probe_world = _pixel_to_world_clip(center + forward_px, state, arm)
-    axis = probe_world - center_world
-    axis[0] = 0.0
-    norm = float(np.linalg.norm(axis))
-    if norm < 1e-9:
-        raise RuntimeError("Could not determine clip axis in world space.")
-    return axis / norm
-
-
-def _align_tool_y_to_axis(rotation: np.ndarray, axis_world: np.ndarray) -> np.ndarray:
-    rot = np.asarray(rotation, dtype=float).reshape(3, 3)
-    y_axis = np.asarray(axis_world, dtype=float).reshape(3)
-    y_axis /= np.linalg.norm(y_axis) + 1e-9
-
-    old_y = rot[:, 1]
-    if float(np.dot(old_y, y_axis)) < 0.0:
-        y_axis = -y_axis
-
-    z_pref = rot[:, 2] - float(np.dot(rot[:, 2], y_axis)) * y_axis
-    if float(np.linalg.norm(z_pref)) < 1e-6:
-        z_pref = rot[:, 0] - float(np.dot(rot[:, 0], y_axis)) * y_axis
-    if float(np.linalg.norm(z_pref)) < 1e-6:
-        fallback = np.array([1.0, 0.0, 0.0], dtype=float)
-        z_pref = fallback - float(np.dot(fallback, y_axis)) * y_axis
-
-    z_axis = z_pref / (np.linalg.norm(z_pref) + 1e-9)
-    x_axis = np.cross(y_axis, z_axis)
-    x_axis /= np.linalg.norm(x_axis) + 1e-9
-    z_axis = np.cross(x_axis, y_axis)
-    z_axis /= np.linalg.norm(z_axis) + 1e-9
-    return np.stack([x_axis, y_axis, z_axis], axis=1)
 
 
 def _move_pixel_along_route(primary_px: np.ndarray, state: Any) -> np.ndarray:
@@ -111,6 +74,62 @@ def _execute_secondary_arm(state: Any) -> bool:
     )
 
 
+def _board_normal_first_route_rotation(
+    state: Any,
+    arm: str,
+    position_world: np.ndarray,
+    curr_clip: Any,
+    plane: Any,
+    fallback_pose: Dict[str, Any],
+) -> np.ndarray:
+    top_side_signs = getattr(state, "first_route_arm_top_side_signs", None)
+    if not isinstance(top_side_signs, dict) or arm not in top_side_signs:
+        return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+
+    board_z = np.asarray(plane.normal, dtype=float).reshape(3)
+    board_z /= np.linalg.norm(board_z) + 1e-9
+    tool_z = -board_z
+
+    clip_center = _pixel_to_world_clip(
+        np.array([float(curr_clip.x), float(curr_clip.y)], dtype=float),
+        state,
+        arm,
+    )
+    to_clip = clip_center - np.asarray(position_world, dtype=float).reshape(3)
+    to_clip = to_clip - float(np.dot(to_clip, tool_z)) * tool_z
+    if float(np.linalg.norm(to_clip)) < 1e-6:
+        return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+    top_axis_world = to_clip / (np.linalg.norm(to_clip) + 1e-9)
+
+    top_side_sign = 1.0 if float(top_side_signs[arm]) >= 0.0 else -1.0
+    tool_y = top_axis_world * top_side_sign
+    tool_x = np.cross(tool_y, tool_z)
+    tool_x /= np.linalg.norm(tool_x) + 1e-9
+    tool_z = np.cross(tool_x, tool_y)
+    tool_z /= np.linalg.norm(tool_z) + 1e-9
+    return np.stack([tool_x, tool_y, tool_z], axis=1)
+
+
+def _first_route_rotation_for_arm(
+    state: Any,
+    arm: str,
+    position_world: np.ndarray,
+    curr_clip: Any,
+    plane: Any,
+    fallback_pose: Dict[str, Any],
+) -> np.ndarray:
+    if arm == getattr(state, "descend_second_arm", None):
+        return _board_normal_first_route_rotation(
+            state,
+            arm,
+            position_world,
+            curr_clip,
+            plane,
+            fallback_pose,
+        )
+    return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+
+
 def build_first_route_execution_poses(
     state: Any,
     min_dist_xyz: float = 0.08,
@@ -149,9 +168,17 @@ def build_first_route_execution_poses(
         plane,
         routing_height,
     )
+    primary_grasp_pose = _grasp_pose_for_arm_or_fallback(state, primary_arm)
     primary_pose = {
         "position": primary_pos,
-        "rotation": np.asarray(_grasp_pose_for_arm_or_fallback(state, primary_arm)["rotation"]),
+        "rotation": _first_route_rotation_for_arm(
+            state,
+            primary_arm,
+            primary_pos,
+            curr_clip,
+            plane,
+            primary_grasp_pose,
+        ),
     }
 
     secondary_pose = _grasp_pose_for_arm_or_fallback(state, secondary_arm)
@@ -190,19 +217,15 @@ def build_first_route_execution_poses(
     )
     secondary_target = {
         "position": secondary_pos,
-        "rotation": np.asarray(secondary_pose["rotation"]),
+        "rotation": _first_route_rotation_for_arm(
+            state,
+            secondary_arm,
+            secondary_pos,
+            curr_clip,
+            plane,
+            secondary_pose,
+        ),
     }
-
-    if clip_type == CLIP_TYPE_U_CLIP:
-        clip_axis = _clip_axis_world(curr_clip, state, primary_arm)
-        primary_pose["rotation"] = _align_tool_y_to_axis(
-            primary_pose["rotation"],
-            clip_axis,
-        )
-        secondary_target["rotation"] = _align_tool_y_to_axis(
-            secondary_target["rotation"],
-            clip_axis,
-        )
 
     left, right = (
         (primary_pose, secondary_target)
@@ -246,21 +269,40 @@ def build_c_clip_centering_poses(
         config=state.config,
     )
 
+    primary_center_pos = ensure_min_plane_height(
+        _pixel_to_world_clip(primary_px, state, primary_arm),
+        plane,
+        routing_height,
+    )
+    primary_grasp_pose = _grasp_pose_for_arm_or_fallback(state, primary_arm)
     primary_pose = {
-        "position": ensure_min_plane_height(
-            _pixel_to_world_clip(primary_px, state, primary_arm),
+        "position": primary_center_pos,
+        "rotation": _first_route_rotation_for_arm(
+            state,
+            primary_arm,
+            primary_center_pos,
+            curr_clip,
             plane,
-            routing_height,
+            primary_grasp_pose,
         ),
-        "rotation": np.asarray(_grasp_pose_for_arm_or_fallback(state, primary_arm)["rotation"]),
     }
+
+    secondary_center_pos = ensure_min_plane_height(
+        _pixel_to_world_clip(secondary_px, state, secondary_arm),
+        plane,
+        routing_height,
+    )
+    secondary_grasp_pose = _grasp_pose_for_arm_or_fallback(state, secondary_arm)
     secondary_pose = {
-        "position": ensure_min_plane_height(
-            _pixel_to_world_clip(secondary_px, state, secondary_arm),
+        "position": secondary_center_pos,
+        "rotation": _first_route_rotation_for_arm(
+            state,
+            secondary_arm,
+            secondary_center_pos,
+            curr_clip,
             plane,
-            routing_height,
+            secondary_grasp_pose,
         ),
-        "rotation": np.asarray(_grasp_pose_for_arm_or_fallback(state, secondary_arm)["rotation"]),
     }
 
     left, right = (

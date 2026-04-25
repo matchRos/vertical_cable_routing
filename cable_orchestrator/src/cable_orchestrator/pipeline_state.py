@@ -44,6 +44,7 @@ class PipelineState:
     handover_repark_done: bool = False
     present_cable_vertical_done: bool = False
     second_arm_side_approach_done: bool = False
+    first_route_arm_top_side_signs: Optional[Dict[str, float]] = None
 
     logs: List[str] = field(default_factory=list)
     finished_steps: List[str] = field(default_factory=list)
@@ -84,6 +85,7 @@ class PipelineState:
         self.handover_repark_done = False
         self.present_cable_vertical_done = False
         self.second_arm_side_approach_done = False
+        self.first_route_arm_top_side_signs = None
 
         self.logs.clear()
         self.finished_steps.clear()

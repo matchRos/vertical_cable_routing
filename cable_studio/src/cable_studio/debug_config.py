@@ -173,6 +173,7 @@ class DebugConfig:
     dual_side_second_arm_delta_z_m: float = -0.1
     present_cable_extra_world_rx_deg: float = 90.0
     second_arm_extra_world_ry_deg: float = 90.0
+    second_arm_flip_world_y_180: bool = True
     dual_side_second_arm_prepose_offset_y_m: float = 0.08
     dual_side_second_arm_prepose_pause_s: float = 0.5
     dual_side_second_arm_slow_approach_extra_y_m: float = 0.01
