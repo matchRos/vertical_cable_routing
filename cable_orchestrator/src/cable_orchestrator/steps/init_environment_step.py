@@ -6,6 +6,8 @@ from autolab_core import RigidTransform
 from cable_core.board_models import DebugBoard
 from cable_core.board_yz_calibration import load_board_yz_calibration_optional
 from cable_orchestrator.base_step import BaseStep
+from cable_perception.camera_adapter import create_camera_subscriber
+from cable_perception.tracer_adapter import create_cable_tracer
 from cable_studio.debug_config import DebugConfig, load_debug_config
 from cable_studio.debug_context import DebugContext
 
@@ -26,19 +28,17 @@ class InitEnvironmentStep(BaseStep):
     def _try_create_camera(self) -> Tuple[Optional[Any], Optional[str]]:
         try:
             import rospy
-            from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
             if not rospy.core.is_initialized():
                 rospy.init_node("cable_studio_camera", anonymous=True, disable_signals=True)
             rospy.sleep(1.0)
-            return ZedCameraSubscriber(), None
+            return create_camera_subscriber(), None
         except Exception as exc:
             return None, str(exc)
 
     def _try_create_tracer(self) -> Tuple[Optional[Any], Optional[str]]:
         try:
-            from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
-            return CableTracer(), None
+            return create_cable_tracer(), None
         except Exception as exc:
             return None, str(exc)
 

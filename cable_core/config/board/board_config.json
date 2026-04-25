@@ -1,0 +1,50 @@
+{
+    "A": {
+        "x": 557,
+        "y": 175,
+        "type": 1,
+        "orientation": 90
+    },
+    "B": {
+        "x": 1010,
+        "y": 242,
+        "type": 3,
+        "orientation": 0
+    },
+    "C": {
+        "x": 1359,
+        "y": 204,
+        "type": 1,
+        "orientation": 0
+    },
+    "D": {
+        "x": 1266,
+        "y": 421,
+        "type": 1,
+        "orientation": 0
+    },
+    "E": {
+        "x": 1413,
+        "y": 587,
+        "type": 1,
+        "orientation": 0
+    },
+    "F": {
+        "x": 1126,
+        "y": 614,
+        "type": 1,
+        "orientation": 0
+    },
+    "G": {
+        "x": 934,
+        "y": 589,
+        "type": 1,
+        "orientation": 0
+    },
+    "H": {
+        "x": 593,
+        "y": 780,
+        "type": 1,
+        "orientation": 0
+    }
+}

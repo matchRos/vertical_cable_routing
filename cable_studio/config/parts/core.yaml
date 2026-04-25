@@ -1,0 +1,20 @@
+# Core paths, board homography, and arm selection (single vs dual).
+
+board_cfg_path: cable_core/config/board/board_config.json
+default_routing: [0, 1, 2, 3]
+
+fallback_image_width: 1500
+fallback_image_height: 800
+
+debug_image_path: "/ABSOLUTER/PFAD/ZU/DEINEM/BILD.png"
+
+cam_to_robot_left_trans_path: config/cameras/zed_to_world_left.tf
+cam_to_robot_right_trans_path: config/cameras/zed_to_world_right.tf
+
+board_calibration_yaml: config/cameras/camera_robot_2d_calibration.yaml
+
+board_plane_x_m: 0.56
+
+dual_arm_grasp: false
+single_arm_nominal_tcp_left_m: [0.35, 0.22, 0.14]
+single_arm_nominal_tcp_right_m: [0.35, -0.22, 0.14]

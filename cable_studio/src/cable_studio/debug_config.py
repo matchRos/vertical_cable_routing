@@ -11,10 +11,12 @@ from typing import Any, Dict, Optional, Tuple
 
 
 PACKAGE_DIR = Path(__file__).resolve().parents[2]
-REPO_ROOT = PACKAGE_DIR.parent.parent
-PARTS_DIR = REPO_ROOT / "cable_routing" / "debug_gui" / "configs" / "parts"
+REPO_ROOT = PACKAGE_DIR.parent
+PARTS_DIR = PACKAGE_DIR / "config" / "parts"
 PART_FILES = ("core.yaml", "routing_plane.yaml", "trace.yaml", "first_route.yaml")
-CLIP_TYPE_CONFIG_DIR = REPO_ROOT / "cable_routing" / "debug_gui" / "configs" / "clip_types"
+CAMERA_CONFIG_DIR = PACKAGE_DIR / "config" / "cameras"
+CORE_CONFIG_DIR = REPO_ROOT / "cable_core" / "config"
+CLIP_TYPE_CONFIG_DIR = CORE_CONFIG_DIR / "clip_types"
 
 
 def _load_yaml_merged(parts_dir: Path) -> Dict[str, Any]:
@@ -34,15 +36,22 @@ def _load_yaml_merged(parts_dir: Path) -> Dict[str, Any]:
 
 def _expand_paths_if_relative(cfg: Dict[str, Any]) -> None:
     keys = (
+        "board_cfg_path",
         "cam_to_robot_left_trans_path",
         "cam_to_robot_right_trans_path",
         "board_calibration_yaml",
+        "clip_type_config_dir",
     )
     for key in keys:
         val = cfg.get(key)
         if not val or not isinstance(val, str) or os.path.isabs(val):
             continue
-        cfg[key] = os.path.normpath(os.path.join(str(REPO_ROOT / "cable_routing"), val))
+        if val.startswith("config/"):
+            cfg[key] = os.path.normpath(os.path.join(str(PACKAGE_DIR), val))
+        elif val.startswith("cable_core/"):
+            cfg[key] = os.path.normpath(os.path.join(str(REPO_ROOT), val))
+        else:
+            cfg[key] = os.path.normpath(os.path.join(str(REPO_ROOT), val))
 
 
 def _coerce_for_dataclass(name: str, value: Any) -> Any:
@@ -85,7 +94,7 @@ def load_debug_config(parts_dir: Optional[Path] = None) -> "DebugConfig":
 
 @dataclass
 class DebugConfig:
-    board_cfg_path: str = "cable_routing/configs/board/board_config.json"
+    board_cfg_path: str = str(CORE_CONFIG_DIR / "board" / "board_config.json")
     default_routing: tuple = (0, 1, 2, 3)
     fallback_image_width: int = 1500
     fallback_image_height: int = 800
@@ -135,9 +144,9 @@ class DebugConfig:
     c_clip_center_secondary_lateral_px: float = 45.0
     c_clip_center_primary_forward_px: float = 5.0
     c_clip_center_secondary_forward_px: float = -10.0
-    cam_to_robot_left_trans_path: str = str(REPO_ROOT / "cable_routing" / "configs" / "cameras" / "zed_to_world_left.tf")
-    cam_to_robot_right_trans_path: str = str(REPO_ROOT / "cable_routing" / "configs" / "cameras" / "zed_to_world_right.tf")
-    board_calibration_yaml: str = str(REPO_ROOT / "cable_routing" / "debug_gui" / "configs" / "cameras" / "camera_robot_2d_calibration.yaml")
+    cam_to_robot_left_trans_path: str = str(CAMERA_CONFIG_DIR / "zed_to_world_left.tf")
+    cam_to_robot_right_trans_path: str = str(CAMERA_CONFIG_DIR / "zed_to_world_right.tf")
+    board_calibration_yaml: str = str(CAMERA_CONFIG_DIR / "camera_robot_2d_calibration.yaml")
     board_plane_x_m: float = 0.56
     world_from_pixel_z_offset_m: float = 0.1
     dual_arm_grasp: bool = False

@@ -1,0 +1,16 @@
+# First-route execution preview and C-clip pixel primitives.
+
+first_route_primary_extra_along_route_px: 60.0
+
+c_clip_primary_lateral_px: 90.0
+c_clip_secondary_lateral_px: 70.0
+c_clip_primary_forward_px: 30.0
+c_clip_secondary_forward_px: -15.0
+c_clip_swap_sides_when_primary_right: false
+
+c_clip_center_primary_lateral_px: 20.0
+c_clip_center_secondary_lateral_px: 45.0
+c_clip_center_primary_forward_px: 5.0
+c_clip_center_secondary_forward_px: -10.0
+
+dual_side_second_arm_slow_approach_extra_y_m: 0.01

@@ -1,0 +1,19 @@
+# Cable tracer seeds and auto-trace tuning.
+
+trace_start_points: [[100, 100]]
+trace_end_points: null
+
+trace_start_mode: auto_white_rings_from_clip
+trace_white_ring_step_px: 20.0
+trace_white_ring_k_candidates: [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]
+
+trace_min_path_points: 40
+trace_min_end_to_start_px: 100.0
+
+trace_anchor_max_start_dist_px: 90.0
+trace_candidate_min_route_dot: 0.25
+trace_anchor_outward_min_delta_px: 8.0
+
+trace_auto_clip_a_p1_offset_px: 20.0
+trace_auto_clip_a_p2_offset_px: 40.0
+trace_seed_order_descending_from_anchor: true
