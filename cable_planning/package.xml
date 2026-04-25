@@ -11,11 +11,15 @@
   <build_depend>cable_core</build_depend>
   <build_depend>cable_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
+  <build_depend>python3-numpy</build_depend>
+  <build_depend>python3-yaml</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
   <exec_depend>cable_core</exec_depend>
   <exec_depend>cable_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 

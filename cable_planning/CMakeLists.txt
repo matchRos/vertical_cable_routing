@@ -9,6 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
+catkin_python_setup()
+
 catkin_package(
   CATKIN_DEPENDS cable_core cable_msgs geometry_msgs rospy std_msgs
 )
