@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>cable_orchestrator</name>
+  <version>0.0.0</version>
+  <description>High-level orchestration and state-machine control for cable routing tasks.</description>
+
+  <maintainer email="osherexp@todo.todo">osherexp</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>actionlib</build_depend>
+  <build_depend>cable_core</build_depend>
+  <build_depend>cable_motion</build_depend>
+  <build_depend>cable_msgs</build_depend>
+  <build_depend>cable_perception</build_depend>
+  <build_depend>cable_planning</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>actionlib</exec_depend>
+  <exec_depend>cable_core</exec_depend>
+  <exec_depend>cable_motion</exec_depend>
+  <exec_depend>cable_msgs</exec_depend>
+  <exec_depend>cable_perception</exec_depend>
+  <exec_depend>cable_planning</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <export/>
+</package>

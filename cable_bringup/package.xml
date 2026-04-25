@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>cable_bringup</name>
+  <version>0.0.0</version>
+  <description>Launch files and runtime configuration for the cable-routing system.</description>
+
+  <maintainer email="osherexp@todo.todo">osherexp</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>cable_motion</exec_depend>
+  <exec_depend>cable_orchestrator</exec_depend>
+  <exec_depend>cable_perception</exec_depend>
+  <exec_depend>cable_planning</exec_depend>
+  <exec_depend>cable_studio</exec_depend>
+
+  <export/>
+</package>

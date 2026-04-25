@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.0.2)
+project(cable_core)
+
+find_package(catkin REQUIRED COMPONENTS
+  geometry_msgs
+  rospy
+  std_msgs
+)
+
+catkin_package(
+  CATKIN_DEPENDS geometry_msgs rospy std_msgs
+)
+
+install(DIRECTORY config/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+  OPTIONAL
+)
