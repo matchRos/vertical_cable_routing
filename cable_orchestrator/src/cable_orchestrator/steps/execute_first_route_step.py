@@ -27,8 +27,15 @@ class ExecuteFirstRouteStep(BaseStep):
         self.pub_left = rospy.Publisher("/yumi/robl/slowly_approach_pose", PoseStamped, queue_size=1)
         self.pub_right = rospy.Publisher("/yumi/robr/slowly_approach_pose", PoseStamped, queue_size=1)
 
+    def _execute_secondary_arm(self, state) -> bool:
+        return bool(
+            getattr(state.config, "first_route_execute_secondary_arm", True)
+            and getattr(state, "first_route_secondary_shown", False)
+            and getattr(state, "first_route_secondary_target_px", None) is not None
+        )
+
     def _publish_route_pair(self, state, left_msg: PoseStamped, right_msg: PoseStamped) -> str:
-        if is_dual_arm_grasp(state.config):
+        if is_dual_arm_grasp(state.config) or self._execute_secondary_arm(state):
             self.pub_left.publish(left_msg)
             self.pub_right.publish(right_msg)
             return "both"

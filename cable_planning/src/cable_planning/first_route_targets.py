@@ -66,6 +66,14 @@ def _route_height_for_state(state: Any) -> float:
     )
 
 
+def _execute_secondary_arm(state: Any) -> bool:
+    return bool(
+        getattr(state.config, "first_route_execute_secondary_arm", True)
+        and getattr(state, "first_route_secondary_shown", False)
+        and getattr(state, "first_route_secondary_target_px", None) is not None
+    )
+
+
 def build_first_route_execution_poses(
     state: Any,
     min_dist_xyz: float = 0.08,
@@ -153,7 +161,7 @@ def build_first_route_execution_poses(
         if primary_arm == "left"
         else (secondary_target, primary_pose)
     )
-    if is_dual_arm_grasp(state.config):
+    if is_dual_arm_grasp(state.config) or _execute_secondary_arm(state):
         validate_min_distance(left, right, min_dist_xyz, label=f"First route ({mode or 'dual'})")
     return left, right, mode or "dual_slide"
 
@@ -212,6 +220,6 @@ def build_c_clip_centering_poses(
         if primary_arm == "left"
         else (secondary_pose, primary_pose)
     )
-    if is_dual_arm_grasp(state.config):
+    if is_dual_arm_grasp(state.config) or _execute_secondary_arm(state):
         validate_min_distance(left, right, min_dist_xyz, label="C-clip centering")
     return left, right, "c_clip_center"

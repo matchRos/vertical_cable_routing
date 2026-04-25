@@ -115,6 +115,7 @@ class DebugConfig:
     trace_white_ring_step_px: float = 20.0
     trace_white_ring_k_candidates: Tuple[float, ...] = (0.0, 0.1, 0.3, 0.5, 0.7, 1.0)
     trace_min_path_points: int = 40
+    trace_analytic_min_path_points: int = 25
     trace_min_end_to_start_px: float = 100.0
     trace_seed_order_descending_from_anchor: bool = True
     routing_plane_default_id: str = "main"
@@ -140,6 +141,7 @@ class DebugConfig:
     cartesian_targets_world_position_offset_m: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     detangle_offset_from_routing_m: float = 0.03
     first_route_primary_extra_along_route_px: float = 60.0
+    first_route_execute_secondary_arm: bool = True
     c_clip_primary_lateral_px: float = 90.0
     c_clip_secondary_lateral_px: float = 70.0
     c_clip_primary_forward_px: float = 30.0

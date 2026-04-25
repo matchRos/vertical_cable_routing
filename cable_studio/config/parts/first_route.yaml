@@ -1,6 +1,7 @@
 # First-route execution preview and C-clip pixel primitives.
 
 first_route_primary_extra_along_route_px: 60.0
+first_route_execute_secondary_arm: true
 
 c_clip_primary_lateral_px: 90.0
 c_clip_secondary_lateral_px: 70.0

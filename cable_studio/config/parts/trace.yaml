@@ -8,6 +8,7 @@ trace_white_ring_step_px: 20.0
 trace_white_ring_k_candidates: [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]
 
 trace_min_path_points: 40
+trace_analytic_min_path_points: 25
 trace_min_end_to_start_px: 100.0
 
 trace_anchor_max_start_dist_px: 90.0

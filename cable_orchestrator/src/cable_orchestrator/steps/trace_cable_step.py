@@ -81,6 +81,13 @@ class TraceCableStep(BaseStep):
             detail = f" Tracer init error: {tracer_error}" if tracer_error else ""
             raise RuntimeError("Tracer unavailable; cannot produce pixel path." + detail)
 
+        tracer_backend = getattr(state.env.tracer, "backend", "unknown")
+        trace_min_path_points = int(getattr(state.config, "trace_min_path_points", 150))
+        if tracer_backend == "analytic":
+            trace_min_path_points = int(
+                getattr(state.config, "trace_analytic_min_path_points", trace_min_path_points)
+            )
+
         trace_result = self.tracing_service.run_trace(
             tracer=state.env.tracer,
             image_rgb=image_rgb,
@@ -100,7 +107,7 @@ class TraceCableStep(BaseStep):
             clip_a_p1_offset_px=float(getattr(state.config, "trace_auto_clip_a_p1_offset_px", 20.0)),
             clip_a_p2_offset_px=float(getattr(state.config, "trace_auto_clip_a_p2_offset_px", 40.0)),
             trace_white_ring_step_px=float(getattr(state.config, "trace_white_ring_step_px", 20.0)),
-            trace_min_path_points=int(getattr(state.config, "trace_min_path_points", 150)),
+            trace_min_path_points=trace_min_path_points,
             trace_min_end_to_start_px=float(getattr(state.config, "trace_min_end_to_start_px", 100.0)),
             trace_white_ring_k_candidates=tuple(
                 float(x)
@@ -127,9 +134,10 @@ class TraceCableStep(BaseStep):
         return {
             "image_source": image_source,
             "trace_executed": True,
-            "tracer_backend": getattr(state.env.tracer, "backend", "unknown"),
+            "tracer_backend": tracer_backend,
             "tracer_model_error": getattr(state.env.tracer, "model_error", None),
             "trace_status": str(trace_result["trace_status"]),
+            "trace_min_path_points": trace_min_path_points,
             "num_path_points": 0 if path_in_pixels is None else len(path_in_pixels),
             "start_points": start_points,
             "tracer_start_point_count": int(trace_result.get("tracer_start_point_count", 0)),
