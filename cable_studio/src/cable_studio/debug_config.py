@@ -153,6 +153,9 @@ class DebugConfig:
     peg_route_min_other_arm_distance_m: float = 0.1
     peg_route_arc_samples: int = 10
     peg_route_moveit_waypoint_min_fraction: float = 0.85
+    peg_route_collinear_tolerance_m: float = 0.02
+    peg_route_height_tolerance_m: float = 0.005
+    peg_route_lateral_tolerance_m: float = 0.01
     c_clip_primary_lateral_px: float = 90.0
     c_clip_secondary_lateral_px: float = 70.0
     c_clip_primary_forward_px: float = 30.0

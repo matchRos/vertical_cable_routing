@@ -69,10 +69,17 @@ def _common_tangents_equal_radius(
         raise RuntimeError("Cannot build tangents between coincident peg centers.")
     direction = delta / distance
     normal = np.array([-direction[1], direction[0]], dtype=float)
-    return [
+    tangents = [
         (a + float(sign) * float(radius) * normal, b + float(sign) * float(radius) * normal)
         for sign in (1.0, -1.0)
     ]
+    if distance > 2.0 * float(radius) + 1e-6:
+        cos_theta = np.clip(2.0 * float(radius) / distance, -1.0, 1.0)
+        sin_theta = float(np.sqrt(max(0.0, 1.0 - cos_theta * cos_theta)))
+        for sign in (1.0, -1.0):
+            circle_normal = cos_theta * direction + float(sign) * sin_theta * normal
+            tangents.append((a + float(radius) * circle_normal, b - float(radius) * circle_normal))
+    return tangents
 
 
 def _choose_tangent_by_side(candidates: List[np.ndarray], side_axis_2d: np.ndarray, side_sign: float) -> np.ndarray:
@@ -103,11 +110,13 @@ def _arc_angles(
     incoming_direction_2d: np.ndarray,
     outgoing_direction_2d: np.ndarray,
     samples: int,
+    preferred_side_2d: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, str, float]:
     samples = max(int(samples), 2)
     two_pi = 2.0 * np.pi
     incoming = _normalize(incoming_direction_2d)
     outgoing = _normalize(outgoing_direction_2d)
+    preferred_side = _normalize(preferred_side_2d) if preferred_side_2d is not None else None
     candidates = []
     for direction, delta in (
         ("ccw", (theta_end - theta_start) % two_pi),
@@ -121,20 +130,102 @@ def _arc_angles(
             + float(np.dot(end_tangent, outgoing))
         )
         score = tangent_score - 0.05 * abs(float(delta))
+        if preferred_side is not None:
+            side_score = max(
+                float(
+                    np.dot(
+                        np.array([np.cos(float(angle)), np.sin(float(angle))], dtype=float),
+                        preferred_side,
+                    )
+                )
+                for angle in angles
+            )
+            score += 4.0 * side_score
+            if side_score < -0.02:
+                score -= 10.0
         candidates.append((score, direction, angles))
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return candidates[0][2], candidates[0][1], float(candidates[0][0])
 
 
-def _side_sign_opposite_successor_lateral(
+def _distance_from_line(point_2d: np.ndarray, line_a_2d: np.ndarray, line_b_2d: np.ndarray) -> float:
+    point = np.asarray(point_2d, dtype=float).reshape(2)
+    line_a = np.asarray(line_a_2d, dtype=float).reshape(2)
+    line_b = np.asarray(line_b_2d, dtype=float).reshape(2)
+    line = line_b - line_a
+    line_len = float(np.linalg.norm(line))
+    if line_len < 1e-9:
+        return float("inf")
+    return float(abs(np.cross(line, point - line_a)) / line_len)
+
+
+def _side_label(side_2d: np.ndarray) -> str:
+    side = _normalize(side_2d)
+    x = float(side[0])
+    y = float(side[1])
+    if abs(y) >= abs(x) * 1.25:
+        return "up" if y > 0.0 else "down"
+    if abs(x) >= abs(y) * 1.25:
+        return "right" if x < 0.0 else "left"
+    vertical = "up" if y > 0.0 else "down"
+    lateral = "right" if x < 0.0 else "left"
+    return f"{vertical}-{lateral}"
+
+
+def _side_away_from_successor(
     center_2d: np.ndarray,
     successor_2d: np.ndarray,
-    eps: float = 1e-5,
-) -> float:
-    dx = float(successor_2d[0] - center_2d[0])
-    if abs(dx) <= float(eps):
-        return 1.0
-    return -1.0 if dx > 0.0 else 1.0
+    lateral_tol_m: float,
+) -> np.ndarray:
+    center = np.asarray(center_2d, dtype=float).reshape(2)
+    successor = np.asarray(successor_2d, dtype=float).reshape(2)
+    dx = float(successor[0] - center[0])
+    if abs(dx) > float(lateral_tol_m):
+        return np.array([-np.sign(dx), 0.0], dtype=float)
+    return -_normalize(successor - center)
+
+
+def _choose_collinear_side(
+    prev_2d: np.ndarray,
+    next_2d: np.ndarray,
+    previous_side_2d: Optional[np.ndarray],
+) -> np.ndarray:
+    line = _normalize(np.asarray(next_2d, dtype=float).reshape(2) - np.asarray(prev_2d, dtype=float).reshape(2))
+    normal = np.array([-line[1], line[0]], dtype=float)
+    candidates = [normal, -normal]
+    if previous_side_2d is not None:
+        previous = _normalize(previous_side_2d)
+        candidates.sort(key=lambda cand: float(np.dot(cand, previous)))
+        return candidates[0]
+    candidates.sort(key=lambda cand: (float(cand[1]), -abs(float(cand[0]))), reverse=True)
+    return candidates[0]
+
+
+def _preferred_side_for_peg(
+    prev_2d: np.ndarray,
+    center_2d: np.ndarray,
+    next_2d: np.ndarray,
+    previous_side_2d: Optional[np.ndarray],
+    successor_is_real_peg: bool,
+    collinear_tol_m: float,
+    height_tol_m: float,
+    lateral_tol_m: float,
+) -> Tuple[np.ndarray, str]:
+    prev = np.asarray(prev_2d, dtype=float).reshape(2)
+    center = np.asarray(center_2d, dtype=float).reshape(2)
+    nxt = np.asarray(next_2d, dtype=float).reshape(2)
+
+    if successor_is_real_peg and _distance_from_line(center, prev, nxt) <= float(collinear_tol_m):
+        side = _choose_collinear_side(prev, nxt, previous_side_2d)
+        return side, "collinear"
+
+    center_h = float(center[1])
+    if center_h > max(float(prev[1]), float(nxt[1])) + float(height_tol_m):
+        return np.array([0.0, 1.0], dtype=float), "height_extreme"
+    if center_h < min(float(prev[1]), float(nxt[1])) - float(height_tol_m):
+        return np.array([0.0, -1.0], dtype=float), "height_extreme"
+
+    return _side_away_from_successor(center, nxt, lateral_tol_m), "away_from_successor"
 
 
 def _rotation_from_pull_direction(
@@ -219,6 +310,9 @@ class PegRoutePlanner:
         radius = float(getattr(state.config, "peg_route_clearance_radius_m", 0.035))
         samples = int(getattr(state.config, "peg_route_arc_samples", 10))
         cross_y = float(getattr(state.config, "peg_route_workspace_cross_y_m", 0.2))
+        collinear_tol = float(getattr(state.config, "peg_route_collinear_tolerance_m", 0.02))
+        height_tol = float(getattr(state.config, "peg_route_height_tolerance_m", 0.015))
+        lateral_tol = float(getattr(state.config, "peg_route_lateral_tolerance_m", 0.01))
 
         prev_world = point_at_plane_height(_clip_center_world(state, prev_clip_idx, arm), plane, route_height)
         peg_centers_world = [
@@ -240,29 +334,64 @@ class PegRoutePlanner:
         axis_x = _normalize(plane.v_axis)
         axis_y = _normalize(plane.u_axis)
         plane_origin = np.asarray(plane.origin, dtype=float).reshape(3)
-        side_axis_2d = np.array([1.0, 0.0], dtype=float)
 
         start_2d = _plane_coords(start_world, plane_origin, axis_x, axis_y)
+        prev_clip_2d = _plane_coords(prev_world, plane_origin, axis_x, axis_y)
         terminal_2d = _plane_coords(terminal_world, plane_origin, axis_x, axis_y)
         peg_centers_2d = [_plane_coords(center, plane_origin, axis_x, axis_y) for center in peg_centers_world]
-        side_signs = []
-        for idx, center_world in enumerate(peg_centers_world):
+        preferred_sides_2d: List[np.ndarray] = []
+        side_names: List[str] = []
+        side_reasons: List[str] = []
+        side_debug: List[Dict[str, Any]] = []
+        previous_side_2d: Optional[np.ndarray] = None
+        for idx, center_2d in enumerate(peg_centers_2d):
+            prev_2d = prev_clip_2d if idx == 0 else peg_centers_2d[idx - 1]
+            prev_rule_clip_idx = prev_clip_idx if idx == 0 else peg_clip_indices[idx - 1]
             successor_route_idx = int(route_idx) + idx + 1
+            successor_is_real_peg = False
+            successor_clip_idx = None
             if successor_route_idx < len(routing):
+                successor_clip_idx = int(routing[successor_route_idx])
+                successor_is_real_peg = int(state.clips[successor_clip_idx].clip_type) == CLIP_TYPE_PEG
                 successor_world = point_at_plane_height(
-                    _clip_center_world(state, routing[successor_route_idx], arm),
+                    _clip_center_world(state, successor_clip_idx, arm),
                     plane,
                     route_height,
                 )
             else:
                 successor_world = terminal_world
             successor_2d = _plane_coords(successor_world, plane_origin, axis_x, axis_y)
-            side_signs.append(
-                _side_sign_opposite_successor_lateral(
-                    peg_centers_2d[idx],
-                    successor_2d,
-                )
+            preferred_side_2d, side_reason = _preferred_side_for_peg(
+                prev_2d,
+                center_2d,
+                successor_2d,
+                previous_side_2d,
+                successor_is_real_peg,
+                collinear_tol,
+                height_tol,
+                lateral_tol,
             )
+            preferred_sides_2d.append(preferred_side_2d)
+            side_names.append(_side_label(preferred_side_2d))
+            side_reasons.append(side_reason)
+            side_debug.append(
+                {
+                    "prev_clip": str(state.clips[int(prev_rule_clip_idx)].clip_id),
+                    "curr_clip": str(state.clips[int(peg_clip_indices[idx])].clip_id),
+                    "next_clip": (
+                        str(state.clips[int(successor_clip_idx)].clip_id)
+                        if successor_clip_idx is not None
+                        else "terminal"
+                    ),
+                    "prev_2d": prev_2d.tolist(),
+                    "curr_2d": center_2d.tolist(),
+                    "next_2d": successor_2d.tolist(),
+                    "side": side_names[-1],
+                    "side_vector_2d": preferred_side_2d.tolist(),
+                    "reason": side_reason,
+                }
+            )
+            previous_side_2d = preferred_side_2d
 
         start_rel = start_2d - peg_centers_2d[0]
         start_options = [
@@ -304,7 +433,6 @@ class PegRoutePlanner:
             route_positions_2d: List[np.ndarray] = []
             arc_directions: List[str] = []
             arc_scores: List[float] = []
-            side_names: List[str] = []
             side_scores: List[float] = []
             for peg_i, center_2d in enumerate(peg_centers_2d):
                 prev_point = start_2d if peg_i == 0 else exits[peg_i - 1]
@@ -321,23 +449,24 @@ class PegRoutePlanner:
                     incoming,
                     outgoing,
                     samples,
+                    preferred_sides_2d[peg_i],
                 )
-                mid = np.array(
-                    [np.cos(float(angles[len(angles) // 2])), np.sin(float(angles[len(angles) // 2]))],
-                    dtype=float,
+                preferred_side = _normalize(preferred_sides_2d[peg_i])
+                side_score = max(
+                    float(
+                        np.dot(
+                            np.array([np.cos(float(angle)), np.sin(float(angle))], dtype=float),
+                            preferred_side,
+                        )
+                    )
+                    for angle in angles
                 )
-                side_axis_unit = _normalize(side_axis_2d)
-                entry_side_score = float(side_signs[peg_i]) * float(np.dot(_normalize(entry_rel), side_axis_unit))
-                exit_side_score = float(side_signs[peg_i]) * float(np.dot(_normalize(exit_rel), side_axis_unit))
-                mid_side_score = float(side_signs[peg_i]) * float(np.dot(mid, side_axis_unit))
-                side_score = min(entry_side_score, exit_side_score, mid_side_score)
                 side_scores.append(float(side_score))
                 if side_score < -0.02:
                     total_score -= 10.0
                 total_score += arc_score + 5.0 * side_score
                 arc_directions.append(direction)
                 arc_scores.append(float(arc_score))
-                side_names.append("right" if side_signs[peg_i] < 0.0 else "left")
 
                 arc_points = [
                     center_2d + radius * np.array([np.cos(a), np.sin(a)], dtype=float)
@@ -420,6 +549,14 @@ class PegRoutePlanner:
             "curr_clip_idx": curr_clip_idx,
             "next_clip_idx": terminal_clip_idx,
             "peg_clip_indices": peg_clip_indices,
+            "prev_clip_label": str(state.clips[int(prev_clip_idx)].clip_id),
+            "curr_clip_label": str(state.clips[int(curr_clip_idx)].clip_id),
+            "peg_clip_labels": [str(state.clips[int(clip_idx)].clip_id) for clip_idx in peg_clip_indices],
+            "terminal_clip_label": (
+                str(state.clips[int(terminal_clip_idx)].clip_id)
+                if terminal_clip_idx is not None
+                else None
+            ),
             "terminal_clip_idx": terminal_clip_idx,
             "start_position": start_world,
             "prev_clip_world": prev_world,
@@ -429,7 +566,10 @@ class PegRoutePlanner:
             "poses": poses,
             "waypoints_world": [p["position"] for p in poses],
             "side": ",".join(best["side_names"]),
-            "side_sign": side_signs[0],
+            "side_sign": float(np.sign(preferred_sides_2d[0][0])) if preferred_sides_2d else 0.0,
+            "side_vectors_2d": [side.tolist() for side in preferred_sides_2d],
+            "side_reasons": side_reasons,
+            "side_debug": side_debug,
             "arc_direction": ",".join(best["arc_directions"]),
             "arc_direction_score": float(sum(best["arc_scores"])),
             "arc_directions": best["arc_directions"],

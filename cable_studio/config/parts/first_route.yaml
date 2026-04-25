@@ -10,6 +10,9 @@ peg_route_workspace_cross_y_m: 0.2
 peg_route_min_other_arm_distance_m: 0.1
 peg_route_arc_samples: 10
 peg_route_moveit_waypoint_min_fraction: 0.85
+peg_route_collinear_tolerance_m: 0.02
+peg_route_height_tolerance_m: 0.005
+peg_route_lateral_tolerance_m: 0.01
 
 c_clip_primary_lateral_px: 90.0
 c_clip_secondary_lateral_px: 70.0
