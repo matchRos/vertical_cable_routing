@@ -9,6 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
+catkin_python_setup()
+
 catkin_package(
   CATKIN_DEPENDS cable_msgs cable_orchestrator python_qt_binding rospy std_msgs
 )

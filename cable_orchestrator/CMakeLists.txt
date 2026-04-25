@@ -12,6 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
+catkin_python_setup()
+
 catkin_package(
   CATKIN_DEPENDS actionlib cable_core cable_motion cable_msgs cable_perception cable_planning rospy std_msgs
 )

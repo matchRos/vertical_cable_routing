@@ -72,7 +72,11 @@ def pixel_from_world_debug(
     arm: str = "right",
     intrinsic: Any = None,
     t_cam_base: Any = None,
+    T_cam_base: Any = None,
 ) -> Optional[Tuple[int, int]]:
+    if T_cam_base is not None and t_cam_base is None:
+        t_cam_base = T_cam_base
+
     cal = getattr(env, "board_yz_calibration", None)
     if cal is not None:
         point = np.asarray(world_xyz, dtype=float).reshape(3).copy()
