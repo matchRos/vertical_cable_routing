@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -48,6 +49,8 @@ class MainWindow(QMainWindow):
         self.reset_button = QPushButton("Reset")
         self.save_trace_button = QPushButton("Save Cable Trace")
         self.load_trace_button = QPushButton("Load Cable Trace")
+        self.save_checkpoint_button = QPushButton("Save Checkpoint")
+        self.load_checkpoint_button = QPushButton("Load Checkpoint")
 
         self.trace_mode_combo = QComboBox()
         self.trace_mode_combo.addItem("Auto from config", "auto_from_config")
@@ -82,6 +85,8 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.trace_mode_combo)
         right_layout.addWidget(self.save_trace_button)
         right_layout.addWidget(self.load_trace_button)
+        right_layout.addWidget(self.save_checkpoint_button)
+        right_layout.addWidget(self.load_checkpoint_button)
         right_layout.addWidget(self.reset_button)
 
         main_layout.addLayout(left_layout, stretch=1)
@@ -95,6 +100,8 @@ class MainWindow(QMainWindow):
         self.reset_button.clicked.connect(self.controller.on_reset)
         self.save_trace_button.clicked.connect(self.controller.on_save_trace)
         self.load_trace_button.clicked.connect(self.controller.on_load_trace)
+        self.save_checkpoint_button.clicked.connect(self.controller.on_save_checkpoint)
+        self.load_checkpoint_button.clicked.connect(self.controller.on_load_checkpoint)
         self.trace_mode_combo.currentIndexChanged.connect(self.controller.on_trace_start_mode_changed)
 
     def populate_step_table(self, step_names) -> None:
@@ -149,3 +156,31 @@ class MainWindow(QMainWindow):
     def ask_load_trace_path(self) -> str:
         path, _ = QFileDialog.getOpenFileName(self, "Load Cable Trace", "", "CSV Files (*.csv)")
         return path
+
+    def ask_save_checkpoint_path(self) -> str:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Studio Checkpoint",
+            "studio_checkpoint.pkl",
+            "Studio Checkpoints (*.pkl)",
+        )
+        return path
+
+    def ask_load_checkpoint_path(self) -> str:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Studio Checkpoint",
+            "",
+            "Studio Checkpoints (*.pkl)",
+        )
+        return path
+
+    def confirm_checkpoint_joint_mismatch(self, message: str) -> bool:
+        reply = QMessageBox.warning(
+            self,
+            "YuMi Position Mismatch",
+            message + "\n\nLoad checkpoint anyway?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return reply == QMessageBox.Yes

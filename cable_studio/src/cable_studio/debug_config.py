@@ -104,6 +104,7 @@ class DebugConfig:
     camera_info_topic: str = "/zedm/zed_node/left/camera_info"
     camera_require_depth: bool = False
     camera_wait_timeout_sec: float = 5.0
+    checkpoint_joint_tolerance_rad: float = 0.15
     trace_start_points: Tuple[Tuple[int, int], ...] = ((100, 100),)
     trace_end_points: Optional[Tuple[Tuple[int, int], ...]] = None
     trace_start_mode: str = "auto_from_config"

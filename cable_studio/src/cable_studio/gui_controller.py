@@ -7,6 +7,7 @@ from PyQt5.QtGui import QImage, QPixmap
 from cable_perception.tracing_service import TracingService
 
 from .cable_trace_io import CableTraceIO
+from .checkpoint_io import StudioCheckpointIO
 
 
 class GuiController:
@@ -19,6 +20,7 @@ class GuiController:
         self.runner = runner
         self.window = None
         self.trace_io = CableTraceIO()
+        self.checkpoint_io = StudioCheckpointIO()
         self.tracing_service = TracingService()
         self._trace_start_mode_override = "auto_from_config"
 
@@ -256,3 +258,52 @@ class GuiController:
         world_path = self.trace_io.load_csv(path)
         self.state.path_in_world = world_path
         self._append_log(f"Loaded cable trace from: {path}")
+
+    def on_save_checkpoint(self) -> None:
+        if self.window is None:
+            return
+        path = self.window.ask_save_checkpoint_path()
+        if not path:
+            return
+        try:
+            self.checkpoint_io.save(path, self.state, self.runner)
+            self._append_log(f"Saved studio checkpoint to: {path}")
+        except Exception as exc:
+            traceback.print_exc()
+            self._append_log(f"ERROR while saving checkpoint: {exc}")
+
+    def on_load_checkpoint(self) -> None:
+        if self.window is None:
+            return
+        path = self.window.ask_load_checkpoint_path()
+        if not path:
+            return
+        try:
+            checkpoint = self.checkpoint_io.read(path)
+            saved_joints = checkpoint.get("joint_snapshot")
+            current_joints = self.checkpoint_io.capture_joint_snapshot()
+            readable, msg, worst = self.checkpoint_io.compare_joint_snapshot(saved_joints, current_joints)
+            checkpoint_config = checkpoint.get("state", {}).get("config")
+            tolerance = float(getattr(checkpoint_config, "checkpoint_joint_tolerance_rad", 0.15))
+            if (not readable) or worst > tolerance:
+                warning = (
+                    f"{msg}\n"
+                    f"Tolerance: {tolerance:.3f} rad.\n"
+                    "The robot may not be in the saved physical state."
+                )
+                if not self.window.confirm_checkpoint_joint_mismatch(warning):
+                    self._append_log("Checkpoint load cancelled after YuMi state check.")
+                    return
+                self._append_log(f"Checkpoint YuMi state warning accepted: {msg}")
+            else:
+                self._append_log(f"Checkpoint YuMi state check OK: {msg}")
+
+            self.checkpoint_io.apply(checkpoint, self.state, self.runner)
+            self._sync_trace_mode_combo_from_config()
+            self._update_step_highlight()
+            self._refresh_image_view()
+            self._append_log(f"Loaded studio checkpoint from: {path}")
+            self._append_log(f"Current step: {self.runner.get_current_step_name()}")
+        except Exception as exc:
+            traceback.print_exc()
+            self._append_log(f"ERROR while loading checkpoint: {exc}")
