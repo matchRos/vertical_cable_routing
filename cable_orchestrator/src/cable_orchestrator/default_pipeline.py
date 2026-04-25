@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from cable_orchestrator.pipeline_orchestrator import PipelineOrchestrator
 from cable_orchestrator.step_action import StepBackedAction
+from cable_orchestrator.steps.check_if_grasped_step import CheckIfGraspedStep
+from cable_orchestrator.steps.check_if_lax_step import CheckIfLaxStep
 from cable_orchestrator.steps.close_first_gripper_step import CloseFirstGripperStep
 from cable_orchestrator.steps.close_second_gripper_step import CloseSecondGripperStep
 from cable_orchestrator.steps.compute_orientation_step import ComputeOrientationStep
@@ -41,11 +43,17 @@ def build_default_orchestrator() -> PipelineOrchestrator:
         UnwindWristsStep(),
         DescendToGraspStep(),
         CloseFirstGripperStep(),
+        CheckIfGraspedStep(),
         HandoverFineOrientStep(),
+        CheckIfGraspedStep(),
+        CheckIfLaxStep(),
         HandoverMoveExchangeStep(),
+        CheckIfGraspedStep(),
         PresentCableVerticalStep(),
         SecondArmSideApproachStep(),
         CloseSecondGripperStep(),
+        CheckIfGraspedStep(),
+        CheckIfLaxStep(),
         PlanFirstRouteStep(),
         ExecuteFirstRouteStep(),
     ]

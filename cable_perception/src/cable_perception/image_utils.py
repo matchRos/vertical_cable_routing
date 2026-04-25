@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Iterable, List, Sequence, Tuple
 
+import torch
+
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,3 +73,31 @@ def find_nearest_white_pixel(
         cv2.destroyAllWindows()
 
     return [(int(pixel[1]), int(pixel[0])) for pixel in nearest_pixels]
+
+def is_cable_in_gripper(
+        image: np.ndarray,
+        gripper_bbox: Tuple[int, int, int, int],
+        clip: dict
+) -> bool:
+    # gripper_bbox is (x_min, y_min, x_max, y_max)
+    bounded_image = image[gripper_bbox[0]:gripper_bbox[2], gripper_bbox[1]:gripper_bbox[3]]
+    nearest_cable = find_nearest_white_pixel(
+        bounded_image,
+        clip,
+        num_options=1)
+    return len(nearest_cable) > 0
+
+def is_cable_too_lax(
+        image: np.ndarray,
+        model_type,
+        weights
+ ) -> bool:
+    # This assumes we've retrained a model like ResNet or YOLO for cable laxness classification using PyTorch
+    model = model_type(weights = weights)
+    model.eval()
+    image_transformed = model.preprocess(image)
+    with torch.no_grad():
+        # This inferences the model and gets the predicted class (0 for not too lax, 1 for too lax)
+        output = torch.argmax(model(image_transformed.unsqueeze(0)), dim = 1) 
+    return output.item() == 1
+    
