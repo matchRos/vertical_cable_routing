@@ -4,9 +4,17 @@ import sys
 from pathlib import Path
 
 repo_root = Path(__file__).resolve().parents[2]
-legacy_root = repo_root.parent / "cable_routing"
-if str(legacy_root) not in sys.path:
-    sys.path.insert(0, str(legacy_root))
+package_src_dirs = (
+    repo_root / "cable_core" / "src",
+    repo_root / "cable_planning" / "src",
+    repo_root / "cable_perception" / "src",
+    repo_root / "cable_motion" / "src",
+    repo_root / "cable_orchestrator" / "src",
+    repo_root / "cable_studio" / "src",
+)
+for src_dir in reversed(package_src_dirs):
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
 
 os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
 os.environ.pop("QT_PLUGIN_PATH", None)

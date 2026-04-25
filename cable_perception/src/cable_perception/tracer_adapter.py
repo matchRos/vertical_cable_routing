@@ -4,6 +4,6 @@ from typing import Any
 
 
 def create_cable_tracer() -> Any:
-    from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
+    from handloom_runtime.handloom_pipeline.single_tracer import CableTracer
 
     return CableTracer()

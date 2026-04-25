@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
-from autolab_core import RigidTransform
 
 from cable_core.board_models import DebugBoard
 from cable_core.board_yz_calibration import load_board_yz_calibration_optional
@@ -55,6 +54,11 @@ class InitEnvironmentStep(BaseStep):
                     pass
         return None
 
+    def _load_rigid_transform(self):
+        from autolab_core import RigidTransform
+
+        return RigidTransform
+
     def run(self, state) -> Dict[str, Any]:
         config = self._create_debug_config()
         board, board_error = self._try_create_board(config)
@@ -68,10 +72,11 @@ class InitEnvironmentStep(BaseStep):
         context.T_CAM_BASE = {}
 
         try:
+            rigid_transform = self._load_rigid_transform()
             if config.cam_to_robot_left_trans_path:
-                context.T_CAM_BASE["left"] = RigidTransform.load(config.cam_to_robot_left_trans_path).as_frames(from_frame="zed", to_frame="base_link")
+                context.T_CAM_BASE["left"] = rigid_transform.load(config.cam_to_robot_left_trans_path).as_frames(from_frame="zed", to_frame="base_link")
             if config.cam_to_robot_right_trans_path:
-                context.T_CAM_BASE["right"] = RigidTransform.load(config.cam_to_robot_right_trans_path).as_frames(from_frame="zed", to_frame="base_link")
+                context.T_CAM_BASE["right"] = rigid_transform.load(config.cam_to_robot_right_trans_path).as_frames(from_frame="zed", to_frame="base_link")
         except Exception as exc:
             print(f"Warning: Failed to load T_CAM_BASE: {exc}")
 
