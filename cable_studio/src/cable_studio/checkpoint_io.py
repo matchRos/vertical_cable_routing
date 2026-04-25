@@ -27,6 +27,7 @@ STATE_KEYS = (
     "trace_overlay",
     "grasp_overlay",
     "first_route_overlay",
+    "peg_route_overlay",
     "first_route_executed",
     "path_in_pixels",
     "path_in_world",
@@ -47,7 +48,30 @@ STATE_KEYS = (
     "present_cable_vertical_done",
     "second_arm_side_approach_done",
     "first_route_arm_top_side_signs",
+    "current_primary_arm",
+    "first_route_prev_clip_id",
+    "first_route_curr_clip_id",
+    "first_route_next_clip_id",
+    "first_route_clockwise",
+    "first_route_sequence",
+    "first_route_start_px",
+    "first_route_target_px",
+    "first_route_mode",
+    "first_route_route_height_m",
+    "first_route_clip_type_config",
+    "first_route_secondary_arm",
+    "first_route_secondary_start_px",
+    "first_route_secondary_target_px",
+    "first_route_secondary_shown",
+    "current_arm_poses_world",
+    "next_route_routing_index",
+    "peg_route_plan",
+    "peg_route_executed",
+    "logs",
     "finished_steps",
+    "step_results",
+    "action_feedback",
+    "action_history",
 )
 
 
@@ -166,6 +190,14 @@ class StudioCheckpointIO:
         for key in STATE_KEYS:
             if key in payload:
                 setattr(state, key, payload[key])
+        if not hasattr(state, "step_results") or state.step_results is None:
+            state.step_results = {}
+        if not hasattr(state, "logs") or state.logs is None:
+            state.logs = []
+        if not hasattr(state, "action_feedback") or state.action_feedback is None:
+            state.action_feedback = {}
+        if not hasattr(state, "action_history") or state.action_history is None:
+            state.action_history = []
 
         runner.current_idx = int(checkpoint.get("runner_current_idx", 0))
 

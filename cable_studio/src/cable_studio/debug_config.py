@@ -146,6 +146,13 @@ class DebugConfig:
     detangle_offset_from_routing_m: float = 0.03
     first_route_primary_extra_along_route_px: float = 60.0
     first_route_execute_secondary_arm: bool = True
+    first_route_insert_after_route: bool = True
+    first_route_default_insert_height_above_plane_m: float = 0.01
+    peg_route_clearance_radius_m: float = 0.035
+    peg_route_workspace_cross_y_m: float = 0.2
+    peg_route_min_other_arm_distance_m: float = 0.1
+    peg_route_arc_samples: int = 10
+    peg_route_moveit_waypoint_min_fraction: float = 0.85
     c_clip_primary_lateral_px: float = 90.0
     c_clip_secondary_lateral_px: float = 70.0
     c_clip_primary_forward_px: float = 30.0

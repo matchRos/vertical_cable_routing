@@ -22,6 +22,7 @@ class PipelineState:
     trace_overlay: Optional[np.ndarray] = None
     grasp_overlay: Optional[np.ndarray] = None
     first_route_overlay: Optional[np.ndarray] = None
+    peg_route_overlay: Optional[np.ndarray] = None
     first_route_executed: bool = False
 
     path_in_pixels: Optional[np.ndarray] = None
@@ -45,9 +46,29 @@ class PipelineState:
     present_cable_vertical_done: bool = False
     second_arm_side_approach_done: bool = False
     first_route_arm_top_side_signs: Optional[Dict[str, float]] = None
+    current_primary_arm: Optional[str] = None
+    first_route_prev_clip_id: Optional[int] = None
+    first_route_curr_clip_id: Optional[int] = None
+    first_route_next_clip_id: Optional[int] = None
+    first_route_clockwise: Optional[int] = None
+    first_route_sequence: Optional[Any] = None
+    first_route_start_px: Optional[np.ndarray] = None
+    first_route_target_px: Optional[np.ndarray] = None
+    first_route_mode: Optional[str] = None
+    first_route_route_height_m: Optional[float] = None
+    first_route_clip_type_config: Optional[Dict[str, Any]] = None
+    first_route_secondary_arm: Optional[str] = None
+    first_route_secondary_start_px: Optional[np.ndarray] = None
+    first_route_secondary_target_px: Optional[np.ndarray] = None
+    first_route_secondary_shown: bool = False
+    current_arm_poses_world: Optional[Dict[str, Dict[str, Any]]] = None
+    next_route_routing_index: Optional[int] = None
+    peg_route_plan: Optional[Dict[str, Any]] = None
+    peg_route_executed: bool = False
 
     logs: List[str] = field(default_factory=list)
     finished_steps: List[str] = field(default_factory=list)
+    step_results: Dict[str, Any] = field(default_factory=dict)
     action_feedback: Dict[str, Any] = field(default_factory=dict)
     action_history: List[Any] = field(default_factory=list)
 
@@ -64,6 +85,7 @@ class PipelineState:
         self.trace_overlay = None
         self.grasp_overlay = None
         self.first_route_overlay = None
+        self.peg_route_overlay = None
         self.first_route_executed = False
 
         self.path_in_pixels = None
@@ -86,8 +108,28 @@ class PipelineState:
         self.present_cable_vertical_done = False
         self.second_arm_side_approach_done = False
         self.first_route_arm_top_side_signs = None
+        self.current_primary_arm = None
+        self.first_route_prev_clip_id = None
+        self.first_route_curr_clip_id = None
+        self.first_route_next_clip_id = None
+        self.first_route_clockwise = None
+        self.first_route_sequence = None
+        self.first_route_start_px = None
+        self.first_route_target_px = None
+        self.first_route_mode = None
+        self.first_route_route_height_m = None
+        self.first_route_clip_type_config = None
+        self.first_route_secondary_arm = None
+        self.first_route_secondary_start_px = None
+        self.first_route_secondary_target_px = None
+        self.first_route_secondary_shown = False
+        self.current_arm_poses_world = None
+        self.next_route_routing_index = None
+        self.peg_route_plan = None
+        self.peg_route_executed = False
 
         self.logs.clear()
         self.finished_steps.clear()
+        self.step_results.clear()
         self.action_feedback.clear()
         self.action_history.clear()

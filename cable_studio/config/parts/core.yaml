@@ -1,7 +1,7 @@
 # Core paths, board homography, and arm selection (single vs dual).
 
 board_cfg_path: cable_core/config/board/board_config.json
-default_routing: [0, 1, 2, 3]
+default_routing: [0, 1, 2, 3, 4, 5]
 
 fallback_image_width: 1500
 fallback_image_height: 800

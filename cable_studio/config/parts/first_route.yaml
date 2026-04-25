@@ -2,6 +2,14 @@
 
 first_route_primary_extra_along_route_px: 60.0
 first_route_execute_secondary_arm: true
+first_route_insert_after_route: true
+first_route_default_insert_height_above_plane_m: 0.01
+
+peg_route_clearance_radius_m: 0.035
+peg_route_workspace_cross_y_m: 0.2
+peg_route_min_other_arm_distance_m: 0.1
+peg_route_arc_samples: 10
+peg_route_moveit_waypoint_min_fraction: 0.85
 
 c_clip_primary_lateral_px: 90.0
 c_clip_secondary_lateral_px: 70.0

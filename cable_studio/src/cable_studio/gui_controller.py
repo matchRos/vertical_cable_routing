@@ -87,6 +87,40 @@ class GuiController:
         if self.window is not None:
             self.window.set_current_step(self.runner.get_current_step_name())
 
+    def _remember_step_result(self, step_name: str, result: Dict[str, Any]) -> None:
+        status_text, status_color = self._classify_step_result(step_name, result=result)
+        if not hasattr(self.state, "step_results") or self.state.step_results is None:
+            self.state.step_results = {}
+        self.state.step_results[step_name] = {
+            "status_text": status_text,
+            "status_color": status_color,
+            "result": result or {},
+        }
+
+    def _restore_step_results_view(self) -> None:
+        if self.window is None:
+            return
+        self.window.clear_step_results()
+        stored = getattr(self.state, "step_results", None) or {}
+        for step_name, entry in stored.items():
+            if not isinstance(entry, dict):
+                continue
+            text = str(entry.get("status_text", "succeeded"))
+            color = str(entry.get("status_color", "#cfeec2"))
+            self.window.set_step_result(step_name, text, color)
+
+        if stored:
+            return
+        for step_name in getattr(self.state, "finished_steps", []) or []:
+            self.window.set_step_result(step_name, "succeeded", "#cfeec2")
+
+    def _restore_log_view(self) -> None:
+        if self.window is None:
+            return
+        self.window.log_box.clear()
+        for message in getattr(self.state, "logs", []) or []:
+            self.window.log_box.append(str(message))
+
     def _classify_step_result(
         self,
         step_name: str,
@@ -129,6 +163,8 @@ class GuiController:
         image = None
         if self.state.grasp_overlay is not None:
             image = self.state.grasp_overlay
+        elif getattr(self.state, "peg_route_overlay", None) is not None:
+            image = self.state.peg_route_overlay
         elif self.state.first_route_overlay is not None:
             image = self.state.first_route_overlay
         elif self.state.trace_overlay is not None:
@@ -152,9 +188,14 @@ class GuiController:
     def _handle_step_result(self, step_name: str, result: Dict[str, Any]) -> None:
         self._append_log(f"Finished step: {step_name}")
         self._append_latest_action_result()
+        self._remember_step_result(step_name, result)
         if self.window is not None:
-            status_text, status_color = self._classify_step_result(step_name, result=result)
-            self.window.set_step_result(step_name, status_text, status_color)
+            stored = self.state.step_results.get(step_name, {})
+            self.window.set_step_result(
+                step_name,
+                stored.get("status_text", "succeeded"),
+                stored.get("status_color", "#cfeec2"),
+            )
         if result:
             for key, value in result.items():
                 self._append_log(f"  {key}: {value}")
@@ -294,14 +335,17 @@ class GuiController:
                 if not self.window.confirm_checkpoint_joint_mismatch(warning):
                     self._append_log("Checkpoint load cancelled after YuMi state check.")
                     return
-                self._append_log(f"Checkpoint YuMi state warning accepted: {msg}")
+                joint_check_message = f"Checkpoint YuMi state warning accepted: {msg}"
             else:
-                self._append_log(f"Checkpoint YuMi state check OK: {msg}")
+                joint_check_message = f"Checkpoint YuMi state check OK: {msg}"
 
             self.checkpoint_io.apply(checkpoint, self.state, self.runner)
             self._sync_trace_mode_combo_from_config()
+            self._restore_log_view()
+            self._restore_step_results_view()
             self._update_step_highlight()
             self._refresh_image_view()
+            self._append_log(joint_check_message)
             self._append_log(f"Loaded studio checkpoint from: {path}")
             self._append_log(f"Current step: {self.runner.get_current_step_name()}")
         except Exception as exc:
