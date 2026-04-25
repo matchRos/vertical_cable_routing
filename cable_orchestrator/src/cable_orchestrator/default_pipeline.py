@@ -21,8 +21,8 @@ from cable_orchestrator.steps.robot_motion_step import RobotMotionStep
 from cable_orchestrator.steps.second_arm_side_approach_step import SecondArmSideApproachStep
 from cable_orchestrator.steps.trace_cable_step import TraceCableStep
 from cable_orchestrator.steps.trace_to_world_step import TraceToWorldStep
+from cable_orchestrator.steps.unwind_wrists_step import UnwindWristsStep
 from cable_orchestrator.steps.visualize_grasps_step import VisualizeGraspsStep
-from cable_routing.debug_gui.pipeline.unwind_wrists_step import UnwindWristsStep
 
 
 def build_default_orchestrator() -> PipelineOrchestrator:

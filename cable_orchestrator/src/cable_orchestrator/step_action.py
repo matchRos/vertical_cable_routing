@@ -4,7 +4,7 @@ import time
 from typing import Dict
 
 from cable_orchestrator.action_types import ActionFeedback, ActionResult, ActionStatus
-from cable_routing.debug_gui.pipeline.base_step import BaseStep
+from cable_orchestrator.base_step import BaseStep
 
 from .base_action import BasePipelineAction
 

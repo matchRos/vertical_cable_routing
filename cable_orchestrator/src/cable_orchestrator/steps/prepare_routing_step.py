@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 
+from cable_core.board_service import BoardService
 from cable_orchestrator.base_step import BaseStep
-from cable_routing.debug_gui.backend.board_service import BoardService
 
 
 class PrepareRoutingStep(BaseStep):
