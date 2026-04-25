@@ -3,6 +3,21 @@ import os
 import sys
 from pathlib import Path
 
+
+def _configure_qt_environment() -> None:
+    os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
+    os.environ.pop("QT_PLUGIN_PATH", None)
+    os.environ.pop("QT_QPA_FONTDIR", None)
+    os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
+    from PyQt5.QtCore import QLibraryInfo
+
+    pyqt_plugin_path = QLibraryInfo.location(QLibraryInfo.PluginsPath)
+    if pyqt_plugin_path:
+        os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = pyqt_plugin_path
+        os.environ["QT_PLUGIN_PATH"] = pyqt_plugin_path
+
+
 repo_root = Path(__file__).resolve().parents[2]
 package_src_dirs = (
     repo_root / "cable_core" / "src",
@@ -16,9 +31,7 @@ for src_dir in reversed(package_src_dirs):
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
-os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
-os.environ.pop("QT_PLUGIN_PATH", None)
-os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+_configure_qt_environment()
 
 from PyQt5.QtWidgets import QApplication
 
@@ -35,6 +48,7 @@ def build_runner() -> StepRunner:
 
 
 def main() -> None:
+    _configure_qt_environment()
     app = QApplication(sys.argv)
     state = PipelineState()
     runner = build_runner()
