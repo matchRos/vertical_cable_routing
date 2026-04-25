@@ -11,6 +11,32 @@ from cable_studio.debug_config import DebugConfig, load_debug_config
 from cable_studio.debug_context import DebugContext
 
 
+class SimpleRigidTransform:
+    def __init__(self, rotation, translation, from_frame="zed", to_frame="base_link"):
+        self.rotation = np.asarray(rotation, dtype=float).reshape(3, 3)
+        self.translation = np.asarray(translation, dtype=float).reshape(3)
+        self.from_frame = from_frame
+        self.to_frame = to_frame
+
+    def as_frames(self, from_frame=None, to_frame=None):
+        return SimpleRigidTransform(
+            self.rotation,
+            self.translation,
+            from_frame=from_frame or self.from_frame,
+            to_frame=to_frame or self.to_frame,
+        )
+
+    def inverse(self):
+        inv_rotation = self.rotation.T
+        inv_translation = -inv_rotation @ self.translation
+        return SimpleRigidTransform(
+            inv_rotation,
+            inv_translation,
+            from_frame=self.to_frame,
+            to_frame=self.from_frame,
+        )
+
+
 class InitEnvironmentStep(BaseStep):
     name = "init_environment"
     description = "Initialize config, debug board, and optional camera preview."
@@ -60,10 +86,16 @@ class InitEnvironmentStep(BaseStep):
                     pass
         return None
 
-    def _load_rigid_transform(self):
-        from autolab_core import RigidTransform
-
-        return RigidTransform
+    def _load_rigid_transform_file(self, path: str) -> SimpleRigidTransform:
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = [line.strip() for line in handle.readlines() if line.strip()]
+        if len(lines) < 5:
+            raise RuntimeError(f"Rigid transform file is incomplete: {path}")
+        from_frame = lines[0]
+        to_frame = lines[1]
+        translation = np.fromstring(lines[2], sep=" ")
+        rotation = np.vstack([np.fromstring(line, sep=" ") for line in lines[3:6]])
+        return SimpleRigidTransform(rotation, translation, from_frame=from_frame, to_frame=to_frame)
 
     def run(self, state) -> Dict[str, Any]:
         config = self._create_debug_config()
@@ -80,11 +112,10 @@ class InitEnvironmentStep(BaseStep):
         context.T_CAM_BASE = {}
 
         try:
-            rigid_transform = self._load_rigid_transform()
             if config.cam_to_robot_left_trans_path:
-                context.T_CAM_BASE["left"] = rigid_transform.load(config.cam_to_robot_left_trans_path).as_frames(from_frame="zed", to_frame="base_link")
+                context.T_CAM_BASE["left"] = self._load_rigid_transform_file(config.cam_to_robot_left_trans_path).as_frames(from_frame="zed", to_frame="base_link")
             if config.cam_to_robot_right_trans_path:
-                context.T_CAM_BASE["right"] = rigid_transform.load(config.cam_to_robot_right_trans_path).as_frames(from_frame="zed", to_frame="base_link")
+                context.T_CAM_BASE["right"] = self._load_rigid_transform_file(config.cam_to_robot_right_trans_path).as_frames(from_frame="zed", to_frame="base_link")
         except Exception as exc:
             print(f"Warning: Failed to load T_CAM_BASE: {exc}")
 

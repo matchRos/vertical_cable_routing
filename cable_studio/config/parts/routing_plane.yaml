@@ -11,7 +11,7 @@ routing_planes:
     v_axis: [0.0, 1.0, 0.0]
 
 routing_height_above_plane_m: 0.025
-grasp_height_above_plane_m: 0.04
+grasp_height_above_plane_m: 0.05
 grasp_extra_world_rx_deg: 90.0
 pregrasp_offset_from_grasp_m: 0.08
 world_from_pixel_z_offset_m: 0.1

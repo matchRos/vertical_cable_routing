@@ -35,6 +35,8 @@ class CableTracer:
         last_path=None,
         idx=1,
         viz=False,
+        path_len=200,
+        analytic_timeout_sec=30.0,
     ):
         def _pt_to_tuple(p):
             arr = np.asarray(p)
@@ -84,16 +86,17 @@ class CableTracer:
                 img_cp,
                 start_pixels,
                 endpoints=end_points,
-                path_len=200,
+                path_len=int(path_len),
                 viz=viz,
                 idx=idx,
+                timeout_sec=float(analytic_timeout_sec),
             )
         else:
             path, status, _, _, _, _ = self.tracer.trace(
                 img_cp,
                 start_pixels,
                 endpoints=end_points,
-                path_len=200,
+                path_len=int(path_len),
                 clips=clips,
                 viz=False,
                 idx=idx,

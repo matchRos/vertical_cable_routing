@@ -166,6 +166,8 @@ def run_white_rings_k_retry(
     min_end_to_start_px: float,
     end_points: Optional[List[Tuple[int, int]]],
     viz: bool,
+    trace_path_len: int = 200,
+    analytic_timeout_sec: float = 30.0,
 ) -> Tuple[np.ndarray, Any, List[Tuple[int, int]], Dict[str, Any]]:
     cx, cy = int(anchor_point[0]), int(anchor_point[1])
     step_f = float(step)
@@ -205,6 +207,8 @@ def run_white_rings_k_retry(
                 start_points=tracer_start_points,
                 end_points=end_points,
                 viz=viz,
+                path_len=int(trace_path_len),
+                analytic_timeout_sec=float(analytic_timeout_sec),
             )
         except Exception as exc:
             msg = str(exc)
@@ -303,6 +307,8 @@ class TracingService:
         trace_min_path_points: int = 150,
         trace_min_end_to_start_px: float = 100.0,
         trace_white_ring_k_candidates: Tuple[float, ...] = (0.0, 0.1, 0.3, 0.5, 0.7, 1.0),
+        trace_path_len: int = 200,
+        trace_analytic_timeout_sec: float = 30.0,
     ) -> Dict[str, Any]:
         if tracer is None:
             raise RuntimeError("Tracer object is not available.")
@@ -454,6 +460,8 @@ class TracingService:
                     min_end_to_start_px=float(trace_min_end_to_start_px),
                     end_points=end_points,
                     viz=viz,
+                    trace_path_len=int(trace_path_len),
+                    analytic_timeout_sec=float(trace_analytic_timeout_sec),
                 )
             else:
                 if start_mode == "auto_from_clip_a":
@@ -565,6 +573,8 @@ class TracingService:
                             start_points=tracer_start_points,
                             end_points=end_points,
                             viz=viz,
+                            path_len=int(trace_path_len),
+                            analytic_timeout_sec=float(trace_analytic_timeout_sec),
                         )
                         if result is not None:
                             if candidate_idx > 0:

@@ -117,6 +117,9 @@ class DebugConfig:
     trace_min_path_points: int = 40
     trace_analytic_min_path_points: int = 25
     trace_min_end_to_start_px: float = 100.0
+    trace_model_path_len: int = 200
+    trace_analytic_path_len: int = 90
+    trace_analytic_timeout_sec: float = 8.0
     trace_seed_order_descending_from_anchor: bool = True
     routing_plane_default_id: str = "main"
     routing_planes: Dict[str, Dict[str, Any]] = field(

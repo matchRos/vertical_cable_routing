@@ -807,7 +807,7 @@ class AnalyticTracer(Tracer):
         self.y_buffer = 50
         self.ep_buffer = 15
 
-    def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0):
+    def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0, timeout_sec=30.0):
 
         img = np.where(img[:, :, :3] > 100, 255, 0).astype("uint8")
 
@@ -864,6 +864,7 @@ class AnalyticTracer(Tracer):
             start_point_2,
             exact_path_len=path_len,
             endpoints=endpoints,
+            timeout=float(timeout_sec),
         )
 
         def _flat_pt(p):

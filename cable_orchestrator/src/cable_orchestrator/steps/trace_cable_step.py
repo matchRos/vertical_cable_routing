@@ -83,10 +83,13 @@ class TraceCableStep(BaseStep):
 
         tracer_backend = getattr(state.env.tracer, "backend", "unknown")
         trace_min_path_points = int(getattr(state.config, "trace_min_path_points", 150))
+        trace_path_len = int(getattr(state.config, "trace_model_path_len", 200))
+        trace_analytic_timeout_sec = float(getattr(state.config, "trace_analytic_timeout_sec", 30.0))
         if tracer_backend == "analytic":
             trace_min_path_points = int(
                 getattr(state.config, "trace_analytic_min_path_points", trace_min_path_points)
             )
+            trace_path_len = int(getattr(state.config, "trace_analytic_path_len", trace_path_len))
 
         trace_result = self.tracing_service.run_trace(
             tracer=state.env.tracer,
@@ -113,6 +116,8 @@ class TraceCableStep(BaseStep):
                 float(x)
                 for x in getattr(state.config, "trace_white_ring_k_candidates", (0.0, 0.1, 0.3, 0.5, 0.7, 1.0))
             ),
+            trace_path_len=trace_path_len,
+            trace_analytic_timeout_sec=trace_analytic_timeout_sec,
         )
 
         path_in_pixels = trace_result["path_in_pixels"]
@@ -138,6 +143,8 @@ class TraceCableStep(BaseStep):
             "tracer_model_error": getattr(state.env.tracer, "model_error", None),
             "trace_status": str(trace_result["trace_status"]),
             "trace_min_path_points": trace_min_path_points,
+            "trace_path_len": trace_path_len,
+            "trace_analytic_timeout_sec": trace_analytic_timeout_sec,
             "num_path_points": 0 if path_in_pixels is None else len(path_in_pixels),
             "start_points": start_points,
             "tracer_start_point_count": int(trace_result.get("tracer_start_point_count", 0)),
