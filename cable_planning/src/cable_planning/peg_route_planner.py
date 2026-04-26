@@ -111,18 +111,23 @@ def _arc_angles(
     outgoing_direction_2d: np.ndarray,
     samples: int,
     preferred_side_2d: Optional[np.ndarray] = None,
+    preferred_flow_2d: Optional[np.ndarray] = None,
+    max_step_rad: float = np.deg2rad(8.0),
 ) -> Tuple[np.ndarray, str, float]:
-    samples = max(int(samples), 2)
+    min_samples = max(int(samples), 2)
+    max_step = max(float(max_step_rad), np.deg2rad(1.0))
     two_pi = 2.0 * np.pi
     incoming = _normalize(incoming_direction_2d)
     outgoing = _normalize(outgoing_direction_2d)
     preferred_side = _normalize(preferred_side_2d) if preferred_side_2d is not None else None
+    preferred_flow = _normalize(preferred_flow_2d) if preferred_flow_2d is not None else None
     candidates = []
     for direction, delta in (
         ("ccw", (theta_end - theta_start) % two_pi),
         ("cw", -((theta_start - theta_end) % two_pi)),
     ):
-        angles = theta_start + np.linspace(0.0, delta, samples)
+        sample_count = max(min_samples, int(np.ceil(abs(float(delta)) / max_step)) + 1)
+        angles = theta_start + np.linspace(0.0, delta, sample_count)
         start_tangent = _circle_tangent(theta_start, direction)
         end_tangent = _circle_tangent(theta_end, direction)
         start_tangent_score = float(np.dot(start_tangent, incoming))
@@ -130,17 +135,30 @@ def _arc_angles(
         tangent_min_score = min(start_tangent_score, end_tangent_score)
         tangent_score = 2.0 * start_tangent_score + end_tangent_score
         side_score = 0.0
+        side_flow_score = 0.0
         if preferred_side is not None:
-            side_score = max(
-                float(
-                    np.dot(
-                        np.array([np.cos(float(angle)), np.sin(float(angle))], dtype=float),
-                        preferred_side,
-                    )
+            side_samples = [
+                (
+                    float(
+                        np.dot(
+                            np.array([np.cos(float(angle)), np.sin(float(angle))], dtype=float),
+                            preferred_side,
+                        )
+                    ),
+                    float(angle),
                 )
                 for angle in angles
-            )
-        score = 100.0 * tangent_min_score + 10.0 * tangent_score - 0.1 * abs(float(delta)) + 0.25 * side_score
+            ]
+            side_score, best_side_angle = max(side_samples, key=lambda item: item[0])
+            if preferred_flow is not None:
+                side_flow_score = float(np.dot(_circle_tangent(best_side_angle, direction), preferred_flow))
+        score = (
+            100.0 * tangent_min_score
+            + 10.0 * tangent_score
+            - 0.1 * abs(float(delta))
+            + 0.25 * side_score
+            + 6.0 * side_flow_score
+        )
         candidates.append((score, direction, angles))
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return candidates[0][2], candidates[0][1], float(candidates[0][0])
@@ -162,6 +180,24 @@ def _arc_tangent_scores(
         "end": end_score,
         "min": min(start_score, end_score),
     }
+
+
+def _arc_side_flow_score(
+    angles: np.ndarray,
+    direction: str,
+    preferred_side_2d: np.ndarray,
+    preferred_flow_2d: np.ndarray,
+) -> float:
+    side = _normalize(preferred_side_2d)
+    flow = _normalize(preferred_flow_2d)
+    _, best_angle = max(
+        (
+            float(np.dot(np.array([np.cos(float(angle)), np.sin(float(angle))], dtype=float), side)),
+            float(angle),
+        )
+        for angle in angles
+    )
+    return float(np.dot(_circle_tangent(best_angle, direction), flow))
 
 
 def _distance_from_line(point_2d: np.ndarray, line_a_2d: np.ndarray, line_b_2d: np.ndarray) -> float:
@@ -325,6 +361,7 @@ class PegRoutePlanner:
         )
         radius = float(getattr(state.config, "peg_route_clearance_radius_m", 0.035))
         samples = int(getattr(state.config, "peg_route_arc_samples", 10))
+        max_arc_step_deg = float(getattr(state.config, "peg_route_arc_max_step_deg", 8.0))
         cross_y = float(getattr(state.config, "peg_route_workspace_cross_y_m", 0.2))
         collinear_tol = float(getattr(state.config, "peg_route_collinear_tolerance_m", 0.02))
         height_tol = float(getattr(state.config, "peg_route_height_tolerance_m", 0.015))
@@ -356,6 +393,7 @@ class PegRoutePlanner:
         terminal_2d = _plane_coords(terminal_world, plane_origin, axis_x, axis_y)
         peg_centers_2d = [_plane_coords(center, plane_origin, axis_x, axis_y) for center in peg_centers_world]
         preferred_sides_2d: List[np.ndarray] = []
+        preferred_flows_2d: List[np.ndarray] = []
         side_names: List[str] = []
         side_reasons: List[str] = []
         side_debug: List[Dict[str, Any]] = []
@@ -388,6 +426,7 @@ class PegRoutePlanner:
                 lateral_tol,
             )
             preferred_sides_2d.append(preferred_side_2d)
+            preferred_flows_2d.append(successor_2d - prev_2d)
             side_names.append(_side_label(preferred_side_2d))
             side_reasons.append(side_reason)
             side_debug.append(
@@ -450,6 +489,9 @@ class PegRoutePlanner:
             arc_directions: List[str] = []
             arc_scores: List[float] = []
             arc_tangent_scores: List[Dict[str, float]] = []
+            arc_side_flow_scores: List[float] = []
+            arc_sample_counts: List[int] = []
+            arc_spans_deg: List[float] = []
             side_scores: List[float] = []
             for peg_i, center_2d in enumerate(peg_centers_2d):
                 prev_point = start_2d if peg_i == 0 else exits[peg_i - 1]
@@ -467,6 +509,8 @@ class PegRoutePlanner:
                     outgoing,
                     samples,
                     preferred_sides_2d[peg_i],
+                    preferred_flows_2d[peg_i],
+                    np.deg2rad(max_arc_step_deg),
                 )
                 tangent_scores = _arc_tangent_scores(
                     _angle_of(entry_rel),
@@ -474,6 +518,12 @@ class PegRoutePlanner:
                     direction,
                     incoming,
                     outgoing,
+                )
+                side_flow_score = _arc_side_flow_score(
+                    angles,
+                    direction,
+                    preferred_sides_2d[peg_i],
+                    preferred_flows_2d[peg_i],
                 )
                 preferred_side = _normalize(preferred_sides_2d[peg_i])
                 side_score = max(
@@ -492,6 +542,9 @@ class PegRoutePlanner:
                 arc_directions.append(direction)
                 arc_scores.append(float(arc_score))
                 arc_tangent_scores.append(tangent_scores)
+                arc_side_flow_scores.append(float(side_flow_score))
+                arc_sample_counts.append(int(len(angles)))
+                arc_spans_deg.append(float(abs(np.degrees(float(angles[-1] - angles[0])))))
 
                 arc_points = [
                     center_2d + radius * np.array([np.cos(a), np.sin(a)], dtype=float)
@@ -509,14 +562,30 @@ class PegRoutePlanner:
                 "arc_directions": arc_directions,
                 "arc_scores": arc_scores,
                 "arc_tangent_scores": arc_tangent_scores,
+                "arc_side_flow_scores": arc_side_flow_scores,
+                "arc_sample_counts": arc_sample_counts,
+                "arc_spans_deg": arc_spans_deg,
                 "side_names": side_names,
                 "side_scores": side_scores,
                 "side_violation_count": sum(1 for score in side_scores if score < -0.02),
                 "min_side_score": min(side_scores) if side_scores else 0.0,
+                "arc_tangent_violation_count": sum(
+                    1 for score in arc_tangent_scores if float(score["min"]) < 0.5
+                ),
+                "min_arc_tangent_score": min(
+                    (float(score["min"]) for score in arc_tangent_scores),
+                    default=0.0,
+                ),
+                "side_flow_violation_count": sum(1 for score in arc_side_flow_scores if score < -0.02),
+                "min_side_flow_score": min(arc_side_flow_scores) if arc_side_flow_scores else 0.0,
             }
             candidate["selection_key"] = (
                 -int(candidate["side_violation_count"]),
+                -int(candidate["arc_tangent_violation_count"]),
+                -int(candidate["side_flow_violation_count"]),
                 float(candidate["min_side_score"]),
+                float(candidate["min_arc_tangent_score"]),
+                float(candidate["min_side_flow_score"]),
                 float(candidate["score"]),
             )
             if best is None or candidate["selection_key"] > best["selection_key"]:
@@ -601,9 +670,16 @@ class PegRoutePlanner:
             "arc_directions": best["arc_directions"],
             "arc_direction_scores": best["arc_scores"],
             "arc_tangent_scores": best["arc_tangent_scores"],
+            "arc_tangent_violation_count": best["arc_tangent_violation_count"],
+            "min_arc_tangent_score": best["min_arc_tangent_score"],
+            "arc_side_flow_scores": best["arc_side_flow_scores"],
+            "arc_sample_counts": best["arc_sample_counts"],
+            "arc_spans_deg": best["arc_spans_deg"],
             "side_scores": best["side_scores"],
             "side_violation_count": best["side_violation_count"],
             "min_side_score": best["min_side_score"],
+            "side_flow_violation_count": best["side_flow_violation_count"],
+            "min_side_flow_score": best["min_side_flow_score"],
             "pull_side_sign": pull_side_sign,
             "clearance_radius_m": radius,
             "continuation_world": [route_positions[-1], terminal_world] if route_positions else [],

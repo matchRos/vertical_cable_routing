@@ -152,6 +152,7 @@ class DebugConfig:
     peg_route_workspace_cross_y_m: float = 0.2
     peg_route_min_other_arm_distance_m: float = 0.1
     peg_route_arc_samples: int = 10
+    peg_route_arc_max_step_deg: float = 8.0
     peg_route_moveit_waypoint_min_fraction: float = 0.85
     peg_route_collinear_tolerance_m: float = 0.02
     peg_route_height_tolerance_m: float = 0.005
