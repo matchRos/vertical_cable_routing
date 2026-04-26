@@ -125,11 +125,11 @@ def _arc_angles(
         angles = theta_start + np.linspace(0.0, delta, samples)
         start_tangent = _circle_tangent(theta_start, direction)
         end_tangent = _circle_tangent(theta_end, direction)
-        tangent_score = (
-            2.0 * float(np.dot(start_tangent, incoming))
-            + float(np.dot(end_tangent, outgoing))
-        )
-        score = tangent_score - 0.05 * abs(float(delta))
+        start_tangent_score = float(np.dot(start_tangent, incoming))
+        end_tangent_score = float(np.dot(end_tangent, outgoing))
+        tangent_min_score = min(start_tangent_score, end_tangent_score)
+        tangent_score = 2.0 * start_tangent_score + end_tangent_score
+        side_score = 0.0
         if preferred_side is not None:
             side_score = max(
                 float(
@@ -140,12 +140,28 @@ def _arc_angles(
                 )
                 for angle in angles
             )
-            score += 4.0 * side_score
-            if side_score < -0.02:
-                score -= 10.0
+        score = 100.0 * tangent_min_score + 10.0 * tangent_score - 0.1 * abs(float(delta)) + 0.25 * side_score
         candidates.append((score, direction, angles))
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return candidates[0][2], candidates[0][1], float(candidates[0][0])
+
+
+def _arc_tangent_scores(
+    theta_start: float,
+    theta_end: float,
+    direction: str,
+    incoming_direction_2d: np.ndarray,
+    outgoing_direction_2d: np.ndarray,
+) -> Dict[str, float]:
+    incoming = _normalize(incoming_direction_2d)
+    outgoing = _normalize(outgoing_direction_2d)
+    start_score = float(np.dot(_circle_tangent(theta_start, direction), incoming))
+    end_score = float(np.dot(_circle_tangent(theta_end, direction), outgoing))
+    return {
+        "start": start_score,
+        "end": end_score,
+        "min": min(start_score, end_score),
+    }
 
 
 def _distance_from_line(point_2d: np.ndarray, line_a_2d: np.ndarray, line_b_2d: np.ndarray) -> float:
@@ -433,6 +449,7 @@ class PegRoutePlanner:
             route_positions_2d: List[np.ndarray] = []
             arc_directions: List[str] = []
             arc_scores: List[float] = []
+            arc_tangent_scores: List[Dict[str, float]] = []
             side_scores: List[float] = []
             for peg_i, center_2d in enumerate(peg_centers_2d):
                 prev_point = start_2d if peg_i == 0 else exits[peg_i - 1]
@@ -451,6 +468,13 @@ class PegRoutePlanner:
                     samples,
                     preferred_sides_2d[peg_i],
                 )
+                tangent_scores = _arc_tangent_scores(
+                    _angle_of(entry_rel),
+                    _angle_of(exit_rel),
+                    direction,
+                    incoming,
+                    outgoing,
+                )
                 preferred_side = _normalize(preferred_sides_2d[peg_i])
                 side_score = max(
                     float(
@@ -467,6 +491,7 @@ class PegRoutePlanner:
                 total_score += arc_score + 5.0 * side_score
                 arc_directions.append(direction)
                 arc_scores.append(float(arc_score))
+                arc_tangent_scores.append(tangent_scores)
 
                 arc_points = [
                     center_2d + radius * np.array([np.cos(a), np.sin(a)], dtype=float)
@@ -483,6 +508,7 @@ class PegRoutePlanner:
                 "route_positions_2d": route_positions_2d,
                 "arc_directions": arc_directions,
                 "arc_scores": arc_scores,
+                "arc_tangent_scores": arc_tangent_scores,
                 "side_names": side_names,
                 "side_scores": side_scores,
                 "side_violation_count": sum(1 for score in side_scores if score < -0.02),
@@ -574,6 +600,7 @@ class PegRoutePlanner:
             "arc_direction_score": float(sum(best["arc_scores"])),
             "arc_directions": best["arc_directions"],
             "arc_direction_scores": best["arc_scores"],
+            "arc_tangent_scores": best["arc_tangent_scores"],
             "side_scores": best["side_scores"],
             "side_violation_count": best["side_violation_count"],
             "min_side_score": best["min_side_score"],

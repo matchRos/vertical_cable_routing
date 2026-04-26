@@ -149,6 +149,7 @@ class PlanNextPegRouteStep(BaseStep):
             "side_debug": plan.get("side_debug"),
             "arc_direction": plan["arc_direction"],
             "arc_direction_score": plan["arc_direction_score"],
+            "arc_tangent_scores": plan.get("arc_tangent_scores"),
             "side_scores": plan.get("side_scores"),
             "side_violation_count": plan.get("side_violation_count"),
             "min_side_score": plan.get("min_side_score"),
