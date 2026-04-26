@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import cv2
 from std_srvs.srv import Trigger
-from cable_perception.image_utils import is_cable_too_lax
+from cable_perception.image_utils import is_cable_too_lax_contours
 
 from cable_orchestrator.base_step import BaseStep
 

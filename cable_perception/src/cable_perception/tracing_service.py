@@ -36,10 +36,10 @@ def path_meets_quality(
     return n_pts >= int(min_path_points) and end_dist >= float(min_end_to_start_px)
 
 
-def snap_to_bright_pixel(image_rgb: np.ndarray, pt, radius: int = 5):
+def snap_to_bright_pixel(gray: np.ndarray, pt, radius: int = 5):
     x = int(round(float(pt[0])))
     y = int(round(float(pt[1])))
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+    # gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
 
     r = int(radius)
     y0 = int(max(0, y - r))
@@ -99,25 +99,26 @@ def _pixels_on_euclidean_ring(
 ) -> List[Tuple[int, int]]:
     rlo, rhi = float(radius) - 0.5, float(radius) + 0.5
     ri = int(math.ceil(float(radius) + 2))
-    out: List[Tuple[int, int]] = []
-    for dy in range(-ri, ri + 1):
-        for dx in range(-ri, ri + 1):
-            dist = math.hypot(dx, dy)
-            if rlo <= dist <= rhi:
-                x, y = cx + dx, cy + dy
-                if 0 <= x < width and 0 <= y < height:
-                    out.append((x, y))
-    return out
+    # Create meshgrid for vectorized distance calculation
+    dy, dx = np.mgrid[-ri:ri+1, -ri:ri+1]
+    dist = np.hypot(dx, dy)
+    # Vectorized mask for ring condition
+    mask = (rlo <= dist) & (dist <= rhi)
+    x = cx + dx[mask]
+    y = cy + dy[mask]
+    # Vectorized bounds check
+    valid = (0 <= x) & (x < width) & (0 <= y) & (y < height)
+    return list(zip(x[valid], y[valid])) # Vectorized version of what used to be there
 
 
 def pick_whitest_pixel_on_ring(
-    image_rgb: np.ndarray,
+    gray: np.ndarray,
     cx: int,
     cy: int,
     radius: float,
 ) -> Tuple[int, int]:
-    h, w = image_rgb.shape[:2]
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+    h, w = gray.shape[:2]
+    # gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     pts = _pixels_on_euclidean_ring(cx, cy, radius, w, h)
 
     if not pts:
@@ -140,11 +141,11 @@ def pick_whitest_pixel_on_ring(
 
 
 def nearest_bright_pixel_global(
-    image_rgb: np.ndarray,
+    gray: np.ndarray,
     anchor_xy: Tuple[int, int],
     threshold: int = 150,
 ) -> Optional[Tuple[int, int]]:
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+    # gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     ys, xs = np.where(gray > threshold)
     if len(xs) == 0:
         return None
@@ -158,7 +159,7 @@ def nearest_bright_pixel_global(
 
 def run_white_rings_k_retry(
     tracer: Any,
-    image_rgb: np.ndarray,
+    gray: np.ndarray,
     anchor_point: Tuple[int, int],
     step: float,
     k_candidates: Tuple[float, ...],
@@ -178,7 +179,7 @@ def run_white_rings_k_retry(
         radii = [kf * step_f, (1.0 + kf) * step_f, (2.0 + kf) * step_f]
         pts_xy: List[Tuple[int, int]] = []
         for rad in radii:
-            pts_xy.append(pick_whitest_pixel_on_ring(image_rgb, cx, cy, float(rad)))
+            pts_xy.append(pick_whitest_pixel_on_ring(gray, cx, cy, float(rad)))
         tracer_start_points = [(int(xy[1]), int(xy[0])) for xy in pts_xy]
         trace_ring_debug: Dict[str, Any] = {
             "anchor_xy": (cx, cy),
@@ -201,7 +202,7 @@ def run_white_rings_k_retry(
         )
         try:
             result = tracer.trace(
-                img=image_rgb,
+                img=gray,
                 start_points=tracer_start_points,
                 end_points=end_points,
                 viz=viz,
@@ -253,7 +254,7 @@ class TracingService:
                 try:
                     result = getattr(camera, method_name)()
                     if isinstance(result, np.ndarray):
-                        return self._ensure_rgb_uint8(result)
+                        return cv2.cvtColor(self._ensure_rgb_uint8(result), cv2.COLOR_RGB2GRAY)
                 except Exception:
                     pass
         return None
@@ -267,7 +268,7 @@ class TracingService:
         image_bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if image_bgr is None:
             return None
-        return cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        return cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
 
     def acquire_image(
         self,
@@ -285,7 +286,7 @@ class TracingService:
     def run_trace(
         self,
         tracer: Any,
-        image_rgb: np.ndarray,
+        gray: np.ndarray,
         start_points: List[Tuple[int, int]],
         end_points: Optional[List[Tuple[int, int]]] = None,
         viz: bool = False,
@@ -316,7 +317,7 @@ class TracingService:
             clip_dict = {"x": int(anchor_point[0]), "y": int(anchor_point[1])}
             try:
                 valid_points = find_nearest_white_pixel(
-                    image_rgb,
+                    gray,
                     clip_dict,
                     num_options=20,
                     display=False,
@@ -359,7 +360,7 @@ class TracingService:
                     int(round(2 * p[1] - anchor_point[1])),
                 )
                 cand = build_three_start_points_from_start_and_direction(
-                    image_rgb,
+                    gray,
                     p,
                     direction_xy,
                     step_px=20,
@@ -446,7 +447,7 @@ class TracingService:
                     )
                 path, status, tracer_start_points, trace_ring_debug = run_white_rings_k_retry(
                     tracer=tracer,
-                    image_rgb=image_rgb,
+                    image_rgb=gray,
                     anchor_point=(int(anchor_point[0]), int(anchor_point[1])),
                     step=float(trace_white_ring_step_px),
                     k_candidates=tuple(float(x) for x in trace_white_ring_k_candidates),
@@ -459,7 +460,7 @@ class TracingService:
                 if start_mode == "auto_from_clip_a":
                     clip_dict = {"x": int(anchor_point[0]), "y": int(anchor_point[1])} if anchor_point is not None else None
                     nearest = (
-                        nearest_bright_pixel_global(image_rgb, anchor_point, threshold=150)
+                        nearest_bright_pixel_global(gray, anchor_point, threshold=150)
                         if anchor_point is not None
                         else None
                     )
@@ -468,7 +469,7 @@ class TracingService:
                     if clip_dict is not None:
                         try:
                             valid_points = find_nearest_white_pixel(
-                                image_rgb,
+                                gray,
                                 clip_dict,
                                 num_options=25,
                                 display=False,
@@ -519,9 +520,9 @@ class TracingService:
                         int(round(anchor_point[0] + direction[0] * float(clip_a_p2_offset_px))),
                         int(round(anchor_point[1] + direction[1] * float(clip_a_p2_offset_px))),
                     )
-                    p0_xy = snap_to_bright_pixel(image_rgb, p0_xy, radius=5)
-                    p1_xy = snap_to_bright_pixel(image_rgb, p1_xy, radius=7)
-                    p2_xy = snap_to_bright_pixel(image_rgb, p2_xy, radius=7)
+                    p0_xy = snap_to_bright_pixel(gray, p0_xy, radius=5)
+                    p1_xy = snap_to_bright_pixel(gray, p1_xy, radius=7)
+                    p2_xy = snap_to_bright_pixel(gray, p2_xy, radius=7)
                     tracer_start_points = [
                         (int(p0_xy[1]), int(p0_xy[0])),
                         (int(p1_xy[1]), int(p1_xy[0])),
@@ -531,7 +532,7 @@ class TracingService:
                     cfg_pts = [tuple(np.asarray(p).reshape(-1)[:2].astype(int)) for p in start_points]
                     if len(cfg_pts) >= 2:
                         tracer_start_points = build_three_start_points_from_start_and_direction(
-                            image_rgb,
+                            gray,
                             cfg_pts[0],
                             cfg_pts[1],
                             step_px=20,
@@ -540,7 +541,7 @@ class TracingService:
                         p0 = cfg_pts[0]
                         p1 = (int(p0[0] + 20), int(p0[1]))
                         tracer_start_points = build_three_start_points_from_start_and_direction(
-                            image_rgb,
+                            gray,
                             p0,
                             p1,
                             step_px=20,
@@ -561,7 +562,7 @@ class TracingService:
                     tracer_start_points = candidate
                     try:
                         result = tracer.trace(
-                            img=image_rgb,
+                            img=gray,
                             start_points=tracer_start_points,
                             end_points=end_points,
                             viz=viz,

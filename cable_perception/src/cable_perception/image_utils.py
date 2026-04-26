@@ -47,7 +47,7 @@ def find_nearest_white_pixel(
     clip: dict,
     num_options: int = 10,
     display: bool = False,
-) -> List[Tuple[int, int]]:
+) -> np.ndarray:
     if len(image.shape) == 3:
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     else:
@@ -72,7 +72,7 @@ def find_nearest_white_pixel(
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    return [(int(pixel[1]), int(pixel[0])) for pixel in nearest_pixels]
+    return np.array([(int(pixel[1]), int(pixel[0])) for pixel in nearest_pixels])
 
 def is_cable_in_gripper(
         image: np.ndarray,
@@ -87,7 +87,7 @@ def is_cable_in_gripper(
         num_options=1)
     return len(nearest_cable) > 0
 
-def is_cable_too_lax(
+def is_cable_too_lax_nn(
         image: np.ndarray,
         model_type,
         weights
@@ -100,4 +100,34 @@ def is_cable_too_lax(
         # This inferences the model and gets the predicted class (0 for not too lax, 1 for too lax)
         output = torch.argmax(model(image_transformed.unsqueeze(0)), dim = 1) 
     return output.item() == 1
+
+def is_cable_too_lax_contours(
+        image: np.ndarray,
+        cable_bbox: Tuple[int, int, int, int],
+        area_threshold: float = 500.0
+) -> bool:
+    # cable_bbox is (x_min, y_min, x_max, y_max)
+    # area_threshold is the threshold to avoid counting pegs (which have a large area) as cables
+
+    bounded_image = image[cable_bbox[0]:cable_bbox[2], cable_bbox[1]:cable_bbox[3]] # Crops image to a single peg-to-peg segment
+    gray = cv2.cvtColor(bounded_image, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    useful_contours = [cnt for cnt in contours if cv2.contourArea(cnt) < area_threshold]
+    if len(useful_contours) == 0:
+        return False
+    for cnt in useful_contours:
+        vx, vy, x0, y0 = cv2.fitLine(cnt, cv2.DIST_L2, 0, 0.01, 0.01)
+        slope = vy / vx
+        avg_dist = 0
+        k = 0
+        for point in cnt:
+            distance = abs(slope * (point[0][0] - x0) - (point[0][1] - y0))
+            avg_dist += distance
+            k += 1
+        if k > 0:
+            avg_dist /= k
+        if avg_dist > 2:  # Threshold for deviation from straight line where we guess it's drooping
+            return True
+    return False
     
