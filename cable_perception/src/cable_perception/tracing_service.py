@@ -39,7 +39,6 @@ def path_meets_quality(
 def snap_to_bright_pixel(gray: np.ndarray, pt, radius: int = 5):
     x = int(round(float(pt[0])))
     y = int(round(float(pt[1])))
-    # gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
 
     r = int(radius)
     y0 = int(max(0, y - r))
@@ -58,13 +57,13 @@ def snap_to_bright_pixel(gray: np.ndarray, pt, radius: int = 5):
 
 
 def build_three_start_points_from_start_and_direction(
-    image_rgb: np.ndarray,
+    gray: np.ndarray,
     start_xy,
     direction_xy,
     step_px: float = 10,
 ):
-    start_xy = snap_to_bright_pixel(image_rgb, start_xy)
-    direction_xy = snap_to_bright_pixel(image_rgb, direction_xy)
+    start_xy = snap_to_bright_pixel(gray, start_xy)
+    direction_xy = snap_to_bright_pixel(gray, direction_xy)
 
     start = np.array(start_xy, dtype=float)
     direction_point = np.array(direction_xy, dtype=float)
@@ -79,9 +78,9 @@ def build_three_start_points_from_start_and_direction(
     p1_xy = start + direction * step_px
     p2_xy = start + direction * (2 * step_px)
 
-    p0_xy = snap_to_bright_pixel(image_rgb, (int(round(p0_xy[0])), int(round(p0_xy[1]))))
-    p1_xy = snap_to_bright_pixel(image_rgb, (int(round(p1_xy[0])), int(round(p1_xy[1]))), radius=7)
-    p2_xy = snap_to_bright_pixel(image_rgb, (int(round(p2_xy[0])), int(round(p2_xy[1]))), radius=7)
+    p0_xy = snap_to_bright_pixel(gray, (int(round(p0_xy[0])), int(round(p0_xy[1]))))
+    p1_xy = snap_to_bright_pixel(gray, (int(round(p1_xy[0])), int(round(p1_xy[1]))), radius=7)
+    p2_xy = snap_to_bright_pixel(gray, (int(round(p2_xy[0])), int(round(p2_xy[1]))), radius=7)
 
     return [
         (p0_xy[1], p0_xy[0]),
@@ -145,7 +144,6 @@ def nearest_bright_pixel_global(
     anchor_xy: Tuple[int, int],
     threshold: int = 150,
 ) -> Optional[Tuple[int, int]]:
-    # gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     ys, xs = np.where(gray > threshold)
     if len(xs) == 0:
         return None
@@ -286,7 +284,7 @@ class TracingService:
     def run_trace(
         self,
         tracer: Any,
-        gray: np.ndarray,
+        image_rgb: np.ndarray,
         start_points: List[Tuple[int, int]],
         end_points: Optional[List[Tuple[int, int]]] = None,
         viz: bool = False,
@@ -307,6 +305,9 @@ class TracingService:
     ) -> Dict[str, Any]:
         if tracer is None:
             raise RuntimeError("Tracer object is not available.")
+
+        # Compute grayscale once to avoid repeated conversions
+        gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
 
         tracer_start_points = start_points
         trace_ring_debug: Optional[Dict[str, Any]] = None
@@ -376,41 +377,37 @@ class TracingService:
             if not candidates:
                 return candidates
 
-            pref = None
+            pref_arr = None
             if preferred_direction_xy is not None:
                 pref = np.asarray(preferred_direction_xy, dtype=float).reshape(2)
                 norm = float(np.linalg.norm(pref))
-                pref = pref / norm if norm > 1e-6 else None
+                pref_arr = pref / norm if norm > 1e-6 else None
+
+            anchor_arr = np.asarray(anchor_point, dtype=float) if anchor_point is not None else None
 
             scored = []
             for cand in candidates:
                 if cand is None or len(cand) < 2:
                     continue
 
-                if anchor_point is not None and len(cand) >= 3:
-                    pts_xy = []
-                    for pt in cand:
-                        arr = np.asarray(pt, dtype=float).reshape(-1)[:2]
-                        pts_xy.append(np.array([arr[1], arr[0]], dtype=float))
-                    dists = [
-                        float(np.linalg.norm(pxy - np.asarray(anchor_point, dtype=float).reshape(2)))
-                        for pxy in pts_xy
-                    ]
+                if anchor_arr is not None and len(cand) >= 3:
+                    # Vectorized: collect points into array
+                    pts = np.array([[pt[1], pt[0]] for pt in cand], dtype=float)  # (n, 2)
+                    # Vectorized distance computation
+                    dists = np.linalg.norm(pts - anchor_arr, axis=1)
                     order = np.argsort(dists)
                     if seed_order_descending_from_anchor:
                         order = order[::-1]
-                    cand = [cand[int(i)] for i in order.tolist()]
+                    cand = [cand[int(i)] for i in order]
 
-                p0 = np.asarray(cand[0], dtype=float).reshape(-1)[:2]
-                p1 = np.asarray(cand[1], dtype=float).reshape(-1)[:2]
-                p0_xy = np.array([p0[1], p0[0]], dtype=float)
-                p1_xy = np.array([p1[1], p1[0]], dtype=float)
+                # Vectorized point extraction
+                p0_arr = np.array([cand[0][1], cand[0][0]], dtype=float)
+                p1_arr = np.array([cand[1][1], cand[1][0]], dtype=float)
 
                 d_anchor = 0.0
-                if anchor_point is not None:
-                    anchor_arr = np.asarray(anchor_point, dtype=float)
-                    d0 = float(np.linalg.norm(p0_xy - anchor_arr))
-                    d1 = float(np.linalg.norm(p1_xy - anchor_arr))
+                if anchor_arr is not None:
+                    d0 = np.linalg.norm(p0_arr - anchor_arr)
+                    d1 = np.linalg.norm(p1_arr - anchor_arr)
                     d_anchor = d0
                     if d_anchor > max_start_dist_px:
                         continue
@@ -422,11 +419,11 @@ class TracingService:
                         if delta < outward_min_delta_px:
                             continue
 
-                dir_xy = p1_xy - p0_xy
-                dir_n = float(np.linalg.norm(dir_xy))
+                dir_xy = p1_arr - p0_arr
+                dir_n = np.linalg.norm(dir_xy)
                 dot = 0.0
-                if pref is not None and dir_n > 1e-6:
-                    dot = float(np.dot(dir_xy / dir_n, pref))
+                if pref_arr is not None and dir_n > 1e-6:
+                    dot = np.dot(dir_xy / dir_n, pref_arr)
                     if dot < min_route_dot:
                         continue
 
@@ -447,7 +444,7 @@ class TracingService:
                     )
                 path, status, tracer_start_points, trace_ring_debug = run_white_rings_k_retry(
                     tracer=tracer,
-                    image_rgb=gray,
+                    gray=gray,
                     anchor_point=(int(anchor_point[0]), int(anchor_point[1])),
                     step=float(trace_white_ring_step_px),
                     k_candidates=tuple(float(x) for x in trace_white_ring_k_candidates),
