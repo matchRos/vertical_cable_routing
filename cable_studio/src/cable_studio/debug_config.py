@@ -65,6 +65,7 @@ def _coerce_for_dataclass(name: str, value: Any) -> Any:
         "single_arm_nominal_tcp_left_m",
         "single_arm_nominal_tcp_right_m",
         "cartesian_targets_world_position_offset_m",
+        "initial_left_grasp_position_offset_m",
         "handover_goal_world_m",
     ) and isinstance(value, list):
         return tuple(float(x) for x in value)
@@ -118,6 +119,7 @@ class DebugConfig:
     trace_min_path_points: int = 40
     trace_analytic_min_path_points: int = 25
     trace_min_end_to_start_px: float = 100.0
+    trace_accept_best_effort_on_quality_fail: bool = True
     trace_model_path_len: int = 200
     trace_analytic_path_len: int = 90
     trace_analytic_timeout_sec: float = 8.0
@@ -138,11 +140,16 @@ class DebugConfig:
     grasp_height_above_plane_m: float = 0.025
     grasp_min_clearance_from_first_peg_m: float = 0.05
     grasp_second_min_arc_from_first_grasp_m: float = 0.08
+    initial_left_grasp_position_offset_m: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     pregrasp_offset_from_grasp_m: float = 0.08
     grasp_extra_world_rx_deg: float = 90.0
     publish_cartesian_targets_in_world_frame: bool = True
     cartesian_targets_world_frame_id: str = "world"
-    cartesian_targets_world_position_offset_m: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    cartesian_targets_world_position_offset_m: Tuple[float, float, float] = (
+        0.0,
+        0.0,
+        0.0,
+    )
     detangle_offset_from_routing_m: float = 0.03
     first_route_primary_extra_along_route_px: float = 60.0
     first_route_execute_secondary_arm: bool = True
@@ -167,8 +174,12 @@ class DebugConfig:
     c_clip_center_primary_forward_px: float = 5.0
     c_clip_center_secondary_forward_px: float = -10.0
     cam_to_robot_left_trans_path: str = str(CAMERA_CONFIG_DIR / "zed_to_world_left.tf")
-    cam_to_robot_right_trans_path: str = str(CAMERA_CONFIG_DIR / "zed_to_world_right.tf")
-    board_calibration_yaml: str = str(CAMERA_CONFIG_DIR / "camera_robot_2d_calibration.yaml")
+    cam_to_robot_right_trans_path: str = str(
+        CAMERA_CONFIG_DIR / "zed_to_world_right.tf"
+    )
+    board_calibration_yaml: str = str(
+        CAMERA_CONFIG_DIR / "camera_robot_2d_calibration.yaml"
+    )
     board_plane_x_m: float = 0.56
     world_from_pixel_z_offset_m: float = 0.1
     dual_arm_grasp: bool = False
@@ -182,6 +193,9 @@ class DebugConfig:
     handover_fine_tool_rx_deg: float = 0.0
     handover_fine_tool_ry_deg: float = 0.0
     handover_fine_tool_rz_deg: float = 0.0
+    handover_exchange_align_axis: str = "tool_x"
+    handover_exchange_tool_z_yaw_offset_deg: float = -90.0
+    handover_exchange_allow_axis_flip: bool = True
     dual_side_second_arm_delta_z_m: float = -0.1
     present_cable_extra_world_rx_deg: float = 90.0
     second_arm_extra_world_ry_deg: float = 90.0

@@ -47,25 +47,35 @@ import matplotlib.pyplot as plt
 
 def find_crossings(img, points, viz=False, radius=20, num_neighbors=1):
     img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    w, h = img_gray.shape
-    xx, yy = np.meshgrid(np.linspace(0, h - 1, h), np.linspace(0, w - 1, w))
-
     max_sums = []
-    masks = []
 
+    r = int(radius)
+    yy, xx = np.ogrid[-r : r + 1, -r : r + 1]
+    disk_mask = (xx * xx + yy * yy) < float(radius) ** 2
     for curr_pt in points:
         y, x = curr_pt
-        mask = (xx - x) ** 2 + (yy - y) ** 2 < radius**2
-        extracted_img = img_gray * mask
-        curr_sum = extracted_img.sum()
+        y = int(round(float(y)))
+        x = int(round(float(x)))
+        y0 = max(0, y - r)
+        y1 = min(img_gray.shape[0], y + r + 1)
+        x0 = max(0, x - r)
+        x1 = min(img_gray.shape[1], x + r + 1)
+
+        mask_y0 = y0 - (y - r)
+        mask_y1 = mask_y0 + (y1 - y0)
+        mask_x0 = x0 - (x - r)
+        mask_x1 = mask_x0 + (x1 - x0)
+        curr_sum = img_gray[y0:y1, x0:x1][
+            disk_mask[mask_y0:mask_y1, mask_x0:mask_x1]
+        ].sum()
 
         max_sums.append(curr_sum)
-        masks.append(mask)
 
     # max_intensity = np.max(max_sums)
     # max_sums = [m / max_intensity for m in max_sums]
-    min_max_norm = lambda x: (x - np.min(x)) / (np.max(x) - np.min(x))
-    max_sums = min_max_norm(max_sums)
+    max_sums = np.asarray(max_sums, dtype=float)
+    denom = float(np.max(max_sums) - np.min(max_sums)) if max_sums.size > 0 else 0.0
+    max_sums = (max_sums - np.min(max_sums)) / denom if denom > 1e-9 else np.zeros_like(max_sums)
 
     if viz:
 

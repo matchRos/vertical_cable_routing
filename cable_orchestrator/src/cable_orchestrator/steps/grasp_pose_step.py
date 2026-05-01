@@ -15,6 +15,19 @@ class GraspPoseStep(BaseStep):
         super().__init__()
         self.service = GraspPoseService()
 
+    def _apply_initial_left_grasp_offset(self, state, poses) -> np.ndarray:
+        offset = np.asarray(
+            getattr(state.config, "initial_left_grasp_position_offset_m", (0.0, 0.0, 0.0)),
+            dtype=float,
+        ).reshape(3)
+        if not np.any(np.abs(offset) > 1e-9):
+            return offset
+
+        for pose in poses:
+            if pose.get("arm") == "left":
+                pose["position"] = np.asarray(pose["position"], dtype=float).reshape(3) + offset
+        return offset
+
     def run(self, state) -> Dict[str, object]:
         if not hasattr(state, "grasps"):
             raise RuntimeError("No grasps available.")
@@ -64,13 +77,17 @@ class GraspPoseStep(BaseStep):
             ).reshape(3)
             poses[0]["arm"] = "left" if float(np.linalg.norm(gpos - left_nom)) <= float(np.linalg.norm(gpos - right_nom)) else "right"
 
+        left_grasp_offset = self._apply_initial_left_grasp_offset(state, poses)
         state.grasp_poses = poses
         print("Assigned arms:", [p["arm"] for p in poses])
+        if np.any(np.abs(left_grasp_offset) > 1e-9):
+            print("Applied initial left grasp position offset:", left_grasp_offset.tolist())
 
         out: Dict[str, object] = {
             "poses_available": True,
             "num_poses": len(poses),
             "arms": [p["arm"] for p in poses],
+            "initial_left_grasp_position_offset_m": left_grasp_offset.tolist(),
             "first_pose_pos": poses[0]["position"].tolist(),
         }
         if len(poses) > 1:

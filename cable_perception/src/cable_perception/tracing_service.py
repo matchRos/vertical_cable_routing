@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -168,12 +169,18 @@ def run_white_rings_k_retry(
     viz: bool,
     trace_path_len: int = 200,
     analytic_timeout_sec: float = 30.0,
+    accept_best_effort_on_quality_fail: bool = True,
 ) -> Tuple[np.ndarray, Any, List[Tuple[int, int]], Dict[str, Any]]:
     cx, cy = int(anchor_point[0]), int(anchor_point[1])
     step_f = float(step)
     last_n = 0
     last_d = 0.0
     last_k: Optional[float] = None
+    best_result: Optional[Tuple[np.ndarray, Any]] = None
+    best_start_points: Optional[List[Tuple[int, int]]] = None
+    best_debug: Optional[Dict[str, Any]] = None
+    best_n = 0
+    best_d = 0.0
 
     for k in k_candidates:
         kf = float(k)
@@ -202,6 +209,7 @@ def run_white_rings_k_retry(
             radii,
         )
         try:
+            trace_start = time.perf_counter()
             result = tracer.trace(
                 img=image_rgb,
                 start_points=tracer_start_points,
@@ -210,6 +218,7 @@ def run_white_rings_k_retry(
                 path_len=int(trace_path_len),
                 analytic_timeout_sec=float(analytic_timeout_sec),
             )
+            trace_elapsed_sec = time.perf_counter() - trace_start
         except Exception as exc:
             msg = str(exc)
             if "Not enough starting points" in msg:
@@ -227,15 +236,43 @@ def run_white_rings_k_retry(
         trace_ring_debug["trace_quality"] = {
             "n_points": n_pts,
             "end_to_start_px": end_dist,
+            "elapsed_sec": trace_elapsed_sec,
         }
         ok = path_meets_quality(path, min_path_points, min_end_to_start_px)
         print(
             f"white_rings k={kf}: quality n={n_pts} end_dist={end_dist:.1f}px "
             f"(min n={min_path_points}, min dist={min_end_to_start_px}) "
-            f"-> {'OK' if ok else 'FAIL'}"
+            f"elapsed={trace_elapsed_sec:.2f}s -> {'OK' if ok else 'FAIL'}"
         )
         if ok:
             return path, status, tracer_start_points, trace_ring_debug
+        if accept_best_effort_on_quality_fail and n_pts >= int(min_path_points):
+            trace_ring_debug["trace_quality"]["accepted_best_effort"] = True
+            print(
+                "white_rings trace has enough points but failed end-distance; "
+                f"accepting current k={kf} as best effort."
+            )
+            return path, status, tracer_start_points, trace_ring_debug
+        if best_result is None or (n_pts, end_dist) > (best_n, best_d):
+            best_result = (path, status)
+            best_start_points = tracer_start_points
+            best_debug = trace_ring_debug
+            best_n, best_d = n_pts, end_dist
+
+    if (
+        accept_best_effort_on_quality_fail
+        and best_result is not None
+        and best_start_points is not None
+        and best_debug is not None
+    ):
+        best_n, best_d = path_quality_metrics(best_result[0])
+        if best_n >= int(min_path_points):
+            best_debug["trace_quality"]["accepted_best_effort"] = True
+            print(
+                "White-ring trace did not meet full quality; accepting best effort "
+                f"n={best_n}, end_dist={best_d:.1f}px."
+            )
+            return best_result[0], best_result[1], best_start_points, best_debug
 
     raise RuntimeError(
         "White-ring cable trace did not meet quality after trying k in "
@@ -309,6 +346,7 @@ class TracingService:
         trace_white_ring_k_candidates: Tuple[float, ...] = (0.0, 0.1, 0.3, 0.5, 0.7, 1.0),
         trace_path_len: int = 200,
         trace_analytic_timeout_sec: float = 30.0,
+        trace_accept_best_effort_on_quality_fail: bool = True,
     ) -> Dict[str, Any]:
         if tracer is None:
             raise RuntimeError("Tracer object is not available.")
@@ -326,6 +364,8 @@ class TracingService:
                     clip_dict,
                     num_options=20,
                     display=False,
+                    min_distance_px=3.0,
+                    max_distance_px=float(max_start_dist_px),
                 )
             except Exception:
                 return []
@@ -439,7 +479,7 @@ class TracingService:
                 scored.append((score, cand))
 
             if not scored:
-                return candidates
+                return candidates[:1]
             scored.sort(key=lambda x: x[0])
             return [cand for _, cand in scored]
 
@@ -462,6 +502,7 @@ class TracingService:
                     viz=viz,
                     trace_path_len=int(trace_path_len),
                     analytic_timeout_sec=float(trace_analytic_timeout_sec),
+                    accept_best_effort_on_quality_fail=bool(trace_accept_best_effort_on_quality_fail),
                 )
             else:
                 if start_mode == "auto_from_clip_a":
@@ -480,6 +521,8 @@ class TracingService:
                                 clip_dict,
                                 num_options=25,
                                 display=False,
+                                min_distance_px=3.0,
+                                max_distance_px=float(max_start_dist_px),
                             )
                         except Exception:
                             valid_points = []
@@ -565,10 +608,14 @@ class TracingService:
 
                 result = None
                 last_exc: Optional[Exception] = None
+                best_result = None
+                best_candidate = None
+                best_n = 0
+                best_d = 0.0
                 for candidate_idx, candidate in enumerate(candidate_pool):
                     tracer_start_points = candidate
                     try:
-                        result = tracer.trace(
+                        candidate_result = tracer.trace(
                             img=image_rgb,
                             start_points=tracer_start_points,
                             end_points=end_points,
@@ -576,7 +623,36 @@ class TracingService:
                             path_len=int(trace_path_len),
                             analytic_timeout_sec=float(trace_analytic_timeout_sec),
                         )
-                        if result is not None:
+                        if candidate_result is not None:
+                            path_candidate, _status_candidate = candidate_result
+                            n_candidate, d_candidate = path_quality_metrics(path_candidate)
+                            if (n_candidate, d_candidate) > (best_n, best_d):
+                                best_result = candidate_result
+                                best_candidate = list(tracer_start_points)
+                                best_n, best_d = n_candidate, d_candidate
+                            if not path_meets_quality(
+                                path_candidate,
+                                int(trace_min_path_points),
+                                float(trace_min_end_to_start_px),
+                            ):
+                                if (
+                                    bool(trace_accept_best_effort_on_quality_fail)
+                                    and n_candidate >= int(trace_min_path_points)
+                                ):
+                                    result = candidate_result
+                                    print(
+                                        "trace candidate "
+                                        f"#{candidate_idx} has enough points but failed end-distance; "
+                                        "accepting as best effort."
+                                    )
+                                    break
+                                print(
+                                    "trace candidate "
+                                    f"#{candidate_idx} quality FAIL: n={n_candidate}, "
+                                    f"end_dist={d_candidate:.1f}px"
+                                )
+                                continue
+                            result = candidate_result
                             if candidate_idx > 0:
                                 print(
                                     "trace succeeded with fallback candidate "
@@ -589,6 +665,19 @@ class TracingService:
                             continue
                         raise
 
+                if (
+                    result is None
+                    and bool(trace_accept_best_effort_on_quality_fail)
+                    and best_result is not None
+                    and best_candidate is not None
+                    and best_n >= int(trace_min_path_points)
+                ):
+                    result = best_result
+                    tracer_start_points = best_candidate
+                    print(
+                        "Trace did not meet full quality; accepting best candidate "
+                        f"n={best_n}, end_dist={best_d:.1f}px."
+                    )
                 if result is None and last_exc is not None:
                     raise last_exc
                 if result is None:
@@ -603,6 +692,9 @@ class TracingService:
                     path,
                     int(trace_min_path_points),
                     float(trace_min_end_to_start_px),
+                ) and not (
+                    bool(trace_accept_best_effort_on_quality_fail)
+                    and n_pts >= int(trace_min_path_points)
                 ):
                     raise RuntimeError(
                         "Trace quality check failed: "

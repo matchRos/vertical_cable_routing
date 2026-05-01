@@ -118,6 +118,9 @@ class TraceCableStep(BaseStep):
             ),
             trace_path_len=trace_path_len,
             trace_analytic_timeout_sec=trace_analytic_timeout_sec,
+            trace_accept_best_effort_on_quality_fail=bool(
+                getattr(state.config, "trace_accept_best_effort_on_quality_fail", True)
+            ),
         )
 
         path_in_pixels = trace_result["path_in_pixels"]

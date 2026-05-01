@@ -10,6 +10,7 @@ trace_white_ring_k_candidates: [0.0, 0.1, 0.3, 0.5, 0.7, 1.0]
 trace_min_path_points: 40
 trace_analytic_min_path_points: 25
 trace_min_end_to_start_px: 100.0
+trace_accept_best_effort_on_quality_fail: true
 trace_model_path_len: 200
 trace_analytic_path_len: 90
 trace_analytic_timeout_sec: 8.0

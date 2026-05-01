@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Iterable, List, Sequence, Tuple
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -12,6 +11,8 @@ def center_pixels_on_cable(
     pixels: Iterable[Sequence[int]],
     num_options: int = 10,
     display: bool = False,
+    min_distance_px: float = 0.0,
+    max_distance_px: float | None = None,
 ) -> np.ndarray:
     image_mask = image[:, :, 0] > 100
     kernel = np.ones((2, 2), np.uint8)
@@ -20,14 +21,28 @@ def center_pixels_on_cable(
 
     processed_pixels = []
     for pixel in pixels:
-        distances = np.linalg.norm(white_pixels - pixel, axis=1)
-        valid_indices = np.where(distances >= 100)[0]
-        if len(valid_indices) > 0:
-            sorted_indices = np.argsort(distances[valid_indices])
-            selected_pixels = white_pixels[valid_indices[sorted_indices[:num_options]]]
-            processed_pixels.append(selected_pixels)
+        if len(white_pixels) == 0:
+            continue
+        pixel_arr = np.asarray(pixel, dtype=float).reshape(1, 2)
+        delta = white_pixels.astype(float) - pixel_arr
+        distances_sq = np.einsum("ij,ij->i", delta, delta)
+        valid = np.ones(len(white_pixels), dtype=bool)
+        if min_distance_px > 0.0:
+            valid &= distances_sq >= float(min_distance_px) ** 2
+        if max_distance_px is not None:
+            valid &= distances_sq <= float(max_distance_px) ** 2
+        valid_indices = np.flatnonzero(valid)
+        if len(valid_indices) == 0:
+            if max_distance_px is not None:
+                continue
+            valid_indices = np.arange(len(white_pixels))
+        sorted_indices = np.argsort(distances_sq[valid_indices])
+        selected_pixels = white_pixels[valid_indices[sorted_indices[:num_options]]]
+        processed_pixels.append(selected_pixels)
 
     if display:
+        import matplotlib.pyplot as plt
+
         pixels = np.atleast_2d(list(pixels))
         plt.imshow(image_mask, cmap="gray")
         for pixel in pixels:
@@ -45,6 +60,8 @@ def find_nearest_white_pixel(
     clip: dict,
     num_options: int = 10,
     display: bool = False,
+    min_distance_px: float = 0.0,
+    max_distance_px: float | None = None,
 ) -> List[Tuple[int, int]]:
     if len(image.shape) == 3:
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -58,7 +75,11 @@ def find_nearest_white_pixel(
         clip_pixel,
         num_options=num_options,
         display=display,
+        min_distance_px=min_distance_px,
+        max_distance_px=max_distance_px,
     )
+    if len(centered_pixels) == 0:
+        return []
     nearest_pixels = centered_pixels[0]
 
     if display:

@@ -13,6 +13,7 @@ routing_planes:
 routing_height_above_plane_m: 0.025
 grasp_height_above_plane_m: 0.05
 grasp_extra_world_rx_deg: 90.0
+initial_left_grasp_position_offset_m: [0.0, -0.005, 0.0]
 pregrasp_offset_from_grasp_m: 0.08
 world_from_pixel_z_offset_m: 0.1
 publish_cartesian_targets_in_world_frame: true
