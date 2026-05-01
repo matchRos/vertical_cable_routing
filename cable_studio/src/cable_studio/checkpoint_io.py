@@ -183,7 +183,9 @@ class StudioCheckpointIO:
 
     def apply(self, checkpoint: Dict[str, Any], state: Any, runner: Any) -> None:
         payload = checkpoint["state"]
-        config = payload.get("config") or load_debug_config()
+        # Checkpoints capture pipeline data, but config is intentionally refreshed
+        # from the current YAML so code/config changes take effect after reload.
+        config = load_debug_config()
         state.reset_runtime_data()
         state.config = config
         state.env = self._rehydrate_context(config)

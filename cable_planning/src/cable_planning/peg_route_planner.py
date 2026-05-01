@@ -595,7 +595,11 @@ class PegRoutePlanner:
             raise RuntimeError("Failed to build peg-chain route candidates.")
 
         route_positions = [
-            _from_plane_coords(point_2d, plane_origin, axis_x, axis_y)
+            point_at_plane_height(
+                _from_plane_coords(point_2d, plane_origin, axis_x, axis_y),
+                plane,
+                route_height,
+            )
             for point_2d in best["route_positions_2d"]
         ]
 
@@ -653,6 +657,7 @@ class PegRoutePlanner:
                 else None
             ),
             "terminal_clip_idx": terminal_clip_idx,
+            "route_height_m": route_height,
             "start_position": start_world,
             "prev_clip_world": prev_world,
             "curr_clip_world": curr_world,

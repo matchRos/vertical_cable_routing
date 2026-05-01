@@ -347,6 +347,7 @@ class GuiController:
             self._refresh_image_view()
             self._append_log(joint_check_message)
             self._append_log(f"Loaded studio checkpoint from: {path}")
+            self._append_log("Checkpoint state loaded with current YAML config.")
             self._append_log(f"Current step: {self.runner.get_current_step_name()}")
         except Exception as exc:
             traceback.print_exc()

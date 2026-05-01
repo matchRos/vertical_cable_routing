@@ -83,10 +83,13 @@ def wait_for_moveit_motion_result(
     arms: List[str],
     timeout_sec: float = 45.0,
     poll_rate_hz: float = 20.0,
+    require_motion_start: bool = True,
 ) -> dict:
     arm_suffix = {"left": "l", "right": "r"}
     latest_status = {arm: "" for arm in arms}
     latest_arrived = {arm: False for arm in arms}
+    latest_active = {arm: False for arm in arms}
+    saw_motion_start = {arm: False for arm in arms}
     subs = []
 
     def _make_status_cb(arm_name: str):
@@ -99,8 +102,16 @@ def wait_for_moveit_motion_result(
             latest_arrived[arm_name] = bool(msg.data)
         return _cb
 
+    def _make_active_cb(arm_name: str):
+        def _cb(msg: Bool) -> None:
+            latest_active[arm_name] = bool(msg.data)
+            if bool(msg.data):
+                saw_motion_start[arm_name] = True
+        return _cb
+
     for arm in arms:
         suffix = arm_suffix[arm]
+        subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/moveit_active", Bool, _make_active_cb(arm), queue_size=1))
         subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/moveit_status", String, _make_status_cb(arm), queue_size=1))
         subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/moveit_arrived", Bool, _make_arrived_cb(arm), queue_size=1))
 
@@ -115,8 +126,17 @@ def wait_for_moveit_motion_result(
             for arm in arms:
                 status = latest_status[arm].lower().strip()
                 arrived = latest_arrived[arm]
+                active = latest_active[arm]
+                if active or status.startswith("executing"):
+                    saw_motion_start[arm] = True
                 if status.startswith("timeout") or "failed" in status or status.startswith("error"):
                     raise RuntimeError(f"MoveIt {arm} arm failed: {latest_status[arm]}")
+                if require_motion_start and not saw_motion_start[arm]:
+                    all_done = False
+                    continue
+                if active:
+                    all_done = False
+                    continue
                 if not arrived and status != "succeeded":
                     all_done = False
             if all_done:
@@ -124,6 +144,7 @@ def wait_for_moveit_motion_result(
                     "arms": list(arms),
                     "status": {arm: latest_status[arm] for arm in arms},
                     "arrived": {arm: latest_arrived[arm] for arm in arms},
+                    "active": {arm: latest_active[arm] for arm in arms},
                 }
             rate.sleep()
     finally:
@@ -135,10 +156,13 @@ def wait_for_cartesian_motion_result(
     arms: List[str],
     timeout_sec: float = 45.0,
     poll_rate_hz: float = 20.0,
+    require_motion_start: bool = True,
 ) -> dict:
     arm_suffix = {"left": "l", "right": "r"}
     latest_status = {arm: "" for arm in arms}
     latest_arrived = {arm: False for arm in arms}
+    latest_active = {arm: False for arm in arms}
+    saw_motion_start = {arm: False for arm in arms}
     subs = []
 
     def _make_status_cb(arm_name: str):
@@ -151,8 +175,16 @@ def wait_for_cartesian_motion_result(
             latest_arrived[arm_name] = bool(msg.data)
         return _cb
 
+    def _make_active_cb(arm_name: str):
+        def _cb(msg: Bool) -> None:
+            latest_active[arm_name] = bool(msg.data)
+            if bool(msg.data):
+                saw_motion_start[arm_name] = True
+        return _cb
+
     for arm in arms:
         suffix = arm_suffix[arm]
+        subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/cartesian_active", Bool, _make_active_cb(arm), queue_size=1))
         subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/cartesian_status", String, _make_status_cb(arm), queue_size=1))
         subs.append(rospy.Subscriber(f"/yumi/rob{suffix}/cartesian_arrived", Bool, _make_arrived_cb(arm), queue_size=1))
 
@@ -166,8 +198,17 @@ def wait_for_cartesian_motion_result(
             for arm in arms:
                 status = latest_status[arm].lower().strip()
                 arrived = latest_arrived[arm]
-                if status.startswith("timeout") or status.startswith("error"):
+                active = latest_active[arm]
+                if active or status.startswith("executing"):
+                    saw_motion_start[arm] = True
+                if status.startswith("timeout") or "failed" in status or status.startswith("error"):
                     raise RuntimeError(f"Cartesian {arm} arm failed: {latest_status[arm]}")
+                if require_motion_start and not saw_motion_start[arm]:
+                    all_done = False
+                    continue
+                if active:
+                    all_done = False
+                    continue
                 if not arrived and status != "succeeded":
                     all_done = False
             if all_done:
@@ -175,6 +216,7 @@ def wait_for_cartesian_motion_result(
                     "arms": list(arms),
                     "status": {arm: latest_status[arm] for arm in arms},
                     "arrived": {arm: latest_arrived[arm] for arm in arms},
+                    "active": {arm: latest_active[arm] for arm in arms},
                 }
             rate.sleep()
     finally:

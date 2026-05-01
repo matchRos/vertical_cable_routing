@@ -164,6 +164,16 @@ class DebugConfig:
     peg_route_collinear_tolerance_m: float = 0.02
     peg_route_height_tolerance_m: float = 0.005
     peg_route_lateral_tolerance_m: float = 0.01
+    execute_next_peg_route_dry_run: bool = False
+    execute_next_peg_route_stepwise: bool = True
+    execute_next_peg_route_pause_s: float = 0.2
+    execute_next_peg_route_min_plane_distance_m: Optional[float] = None
+    execute_next_peg_route_plane_distance_tolerance_m: float = 0.005
+    execute_next_peg_route_summary_samples: int = 12
+    execute_next_peg_route_verbose_geometry: bool = False
+    execute_next_peg_route_verbose_waypoint_count: int = 8
+    execute_next_peg_route_left_tip_link: str = "yumi_tcp_l"
+    execute_next_peg_route_right_tip_link: str = "yumi_tcp_r"
     c_clip_primary_lateral_px: float = 90.0
     c_clip_secondary_lateral_px: float = 70.0
     c_clip_primary_forward_px: float = 30.0
