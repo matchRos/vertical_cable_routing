@@ -65,6 +65,7 @@ def _coerce_for_dataclass(name: str, value: Any) -> Any:
         "single_arm_nominal_tcp_left_m",
         "single_arm_nominal_tcp_right_m",
         "cartesian_targets_world_position_offset_m",
+        "execute_next_peg_route_world_offset_m",
         "initial_left_grasp_position_offset_m",
         "handover_goal_world_m",
     ) and isinstance(value, list):
@@ -155,7 +156,9 @@ class DebugConfig:
     first_route_execute_secondary_arm: bool = True
     first_route_insert_after_route: bool = True
     first_route_default_insert_height_above_plane_m: float = 0.01
-    peg_route_clearance_radius_m: float = 0.035
+    first_route_align_targets_to_board_normal: bool = True
+    first_route_flip_primary_tool_z_180: bool = True
+    peg_route_clearance_radius_m: float = 0.042
     peg_route_workspace_cross_y_m: float = 0.2
     peg_route_min_other_arm_distance_m: float = 0.1
     peg_route_arc_samples: int = 10
@@ -165,7 +168,7 @@ class DebugConfig:
     peg_route_height_tolerance_m: float = 0.005
     peg_route_lateral_tolerance_m: float = 0.01
     execute_next_peg_route_dry_run: bool = False
-    execute_next_peg_route_stepwise: bool = True
+    execute_next_peg_route_stepwise: bool = False
     execute_next_peg_route_pause_s: float = 0.2
     execute_next_peg_route_min_plane_distance_m: Optional[float] = None
     execute_next_peg_route_plane_distance_tolerance_m: float = 0.005
@@ -174,6 +177,9 @@ class DebugConfig:
     execute_next_peg_route_verbose_waypoint_count: int = 8
     execute_next_peg_route_left_tip_link: str = "yumi_tcp_l"
     execute_next_peg_route_right_tip_link: str = "yumi_tcp_r"
+    execute_next_peg_route_world_offset_m: Tuple[float, float, float] = (0.0, 0.0, 0.1)
+    execute_next_peg_route_target_plane_distance_delta_m: float = -0.02
+    execute_next_peg_route_min_plane_distance_delta_m: float = -0.02
     c_clip_primary_lateral_px: float = 90.0
     c_clip_secondary_lateral_px: float = 70.0
     c_clip_primary_forward_px: float = 30.0

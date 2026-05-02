@@ -4,8 +4,10 @@ first_route_primary_extra_along_route_px: 60.0
 first_route_execute_secondary_arm: true
 first_route_insert_after_route: true
 first_route_default_insert_height_above_plane_m: 0.01
+first_route_align_targets_to_board_normal: true
+first_route_flip_primary_tool_z_180: true
 
-peg_route_clearance_radius_m: 0.035
+peg_route_clearance_radius_m: 0.042
 peg_route_workspace_cross_y_m: 0.2
 peg_route_min_other_arm_distance_m: 0.1
 peg_route_arc_samples: 10
@@ -16,7 +18,7 @@ peg_route_height_tolerance_m: 0.005
 peg_route_lateral_tolerance_m: 0.01
 
 execute_next_peg_route_dry_run: false
-execute_next_peg_route_stepwise: true
+execute_next_peg_route_stepwise: false
 execute_next_peg_route_pause_s: 0.2
 execute_next_peg_route_min_plane_distance_m: null
 execute_next_peg_route_plane_distance_tolerance_m: 0.005
@@ -25,6 +27,9 @@ execute_next_peg_route_verbose_geometry: false
 execute_next_peg_route_verbose_waypoint_count: 8
 execute_next_peg_route_left_tip_link: yumi_tcp_l
 execute_next_peg_route_right_tip_link: yumi_tcp_r
+execute_next_peg_route_world_offset_m: [0.0, 0.0, 0.1]
+execute_next_peg_route_target_plane_distance_delta_m: -0.02
+execute_next_peg_route_min_plane_distance_delta_m: -0.02
 
 c_clip_primary_lateral_px: 90.0
 c_clip_secondary_lateral_px: 70.0

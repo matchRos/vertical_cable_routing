@@ -23,11 +23,44 @@ class ExecuteNextPegRouteStep(BaseStep):
         self.pub_right = rospy.Publisher("/yumi/robr/moveit_waypoints", PoseArray, queue_size=1)
         self.tf_listener = tf.TransformListener()
 
-    def _build_pose_array(self, state, plan: dict) -> PoseArray:
+    def _target_plane_distance_delta(self, state) -> float:
+        if hasattr(state.config, "execute_next_peg_route_target_plane_distance_delta_m"):
+            return float(getattr(state.config, "execute_next_peg_route_target_plane_distance_delta_m"))
+        return float(getattr(state.config, "execute_next_peg_route_plane_normal_offset_m", 0.0))
+
+    def _min_plane_distance_delta(self, state) -> float:
+        if hasattr(state.config, "execute_next_peg_route_min_plane_distance_delta_m"):
+            return float(getattr(state.config, "execute_next_peg_route_min_plane_distance_delta_m"))
+        return self._target_plane_distance_delta(state)
+
+    def _execution_offsets(self, state, plan: dict) -> tuple[np.ndarray, np.ndarray, float]:
+        plane = get_routing_plane(state.config, clip_id=int(plan["curr_clip_idx"]))
+        plane_normal = np.asarray(plane.normal, dtype=float).reshape(3)
+        world_offset = np.asarray(
+            getattr(state.config, "execute_next_peg_route_world_offset_m", (0.0, 0.0, 0.0)),
+            dtype=float,
+        ).reshape(3)
+        target_delta = self._target_plane_distance_delta(state)
+        total_offset = world_offset + target_delta * plane_normal
+        return total_offset, world_offset, target_delta
+
+    def _execution_waypoints(self, state, plan: dict, waypoints) -> List[dict]:
+        total_offset, _, _ = self._execution_offsets(state, plan)
+        out = []
+        for waypoint in waypoints:
+            adjusted = dict(waypoint)
+            adjusted["position"] = (
+                np.asarray(waypoint["position"], dtype=float).reshape(3) + total_offset
+            )
+            adjusted["rotation"] = np.asarray(waypoint["rotation"], dtype=float).reshape(3, 3)
+            out.append(adjusted)
+        return out
+
+    def _build_pose_array(self, state, waypoints) -> PoseArray:
         arr = PoseArray()
         arr.header.stamp = rospy.Time.now()
         arr.header.frame_id = getattr(state.config, "cartesian_targets_world_frame_id", "world")
-        for pose in plan["poses"]:
+        for pose in waypoints:
             msg, _ = pose_to_msg(pose["position"], pose["rotation"], config=state.config)
             arr.poses.append(msg.pose)
         return arr
@@ -109,9 +142,12 @@ class ExecuteNextPegRouteStep(BaseStep):
         plane_normal = np.asarray(plane.normal, dtype=float).reshape(3)
         positions = [np.asarray(wp["position"], dtype=float).reshape(3) for wp in waypoints]
         distances = [float(np.dot(pos - plane_origin, plane_normal)) for pos in positions]
+        total_offset, world_offset, target_delta = self._execution_offsets(state, plan)
+        min_delta = self._min_plane_distance_delta(state)
         rospy.logwarn(
             "[execute_next_peg_route] route %s -> %s -> %s | arm=%s | frame=%s | "
-            "waypoints=%d | plane_dist[min/max]=%.4f/%.4f",
+            "waypoints=%d | plane_dist[min/max]=%.4f/%.4f | "
+            "execution_offset=%s world_offset=%s target_plane_delta=%.4f min_plane_delta=%.4f",
             plan.get("prev_clip_label", plan.get("prev_clip_idx")),
             ",".join(str(v) for v in plan.get("peg_clip_labels", plan.get("peg_clip_indices", []))),
             plan.get("terminal_clip_label", plan.get("next_clip_idx")),
@@ -120,6 +156,10 @@ class ExecuteNextPegRouteStep(BaseStep):
             len(positions),
             min(distances),
             max(distances),
+            np.round(total_offset, 4).tolist(),
+            np.round(world_offset, 4).tolist(),
+            target_delta,
+            min_delta,
         )
 
     def _log_waypoint_preview(self, state, plan: dict, msg: PoseArray, waypoints) -> None:
@@ -240,6 +280,7 @@ class ExecuteNextPegRouteStep(BaseStep):
                 float(state.config.routing_height_above_plane_m),
             )
         )
+        min_distance_delta = self._min_plane_distance_delta(state)
         if configured_min_distance is None:
             tolerance = max(
                 0.0,
@@ -251,7 +292,7 @@ class ExecuteNextPegRouteStep(BaseStep):
                     )
                 ),
             )
-            min_distance = route_height - tolerance
+            min_distance = route_height + min_distance_delta - tolerance
         else:
             min_distance = float(configured_min_distance)
         if min_distance <= -1e6:
@@ -266,10 +307,11 @@ class ExecuteNextPegRouteStep(BaseStep):
         min_observed = min(distances)
         rospy.logwarn(
             "[execute_next_peg_route] plane clearance check: min_dist=%.4f m, "
-            "required>=%.4f m, target_route_height=%.4f m",
+            "required>=%.4f m, target_route_height=%.4f m, min_plane_delta=%.4f m",
             min_observed,
             min_distance,
             route_height,
+            min_distance_delta,
         )
         if min_observed < min_distance:
             stale_plan_hint = ""
@@ -353,9 +395,10 @@ class ExecuteNextPegRouteStep(BaseStep):
         if not waypoints:
             raise RuntimeError("peg_route_plan has no poses.")
 
-        msg = self._build_pose_array(state, plan)
-        self._log_waypoint_preview(state, plan, msg, waypoints)
-        self._validate_plane_clearance(state, plan, waypoints)
+        execution_waypoints = self._execution_waypoints(state, plan, waypoints)
+        msg = self._build_pose_array(state, execution_waypoints)
+        self._log_waypoint_preview(state, plan, msg, execution_waypoints)
+        self._validate_plane_clearance(state, plan, execution_waypoints)
 
         dry_run = bool(getattr(state.config, "execute_next_peg_route_dry_run", False))
         if dry_run:
@@ -375,7 +418,7 @@ class ExecuteNextPegRouteStep(BaseStep):
         else:
             self._publish_pose_array(arm, msg)
             motion_result = wait_for_moveit_motion_result([arm])
-        last_pose = waypoints[-1]
+        last_pose = execution_waypoints[-1]
         if getattr(state, "current_arm_poses_world", None) is None:
             state.current_arm_poses_world = {}
         state.current_arm_poses_world[arm] = {

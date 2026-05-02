@@ -74,6 +74,11 @@ def _execute_secondary_arm(state: Any) -> bool:
     )
 
 
+def _rotate_about_tool_z_180(rotation: np.ndarray) -> np.ndarray:
+    rot = np.asarray(rotation, dtype=float).reshape(3, 3)
+    return rot @ np.diag([-1.0, -1.0, 1.0])
+
+
 def _board_normal_first_route_rotation(
     state: Any,
     arm: str,
@@ -82,9 +87,12 @@ def _board_normal_first_route_rotation(
     plane: Any,
     fallback_pose: Dict[str, Any],
 ) -> np.ndarray:
+    fallback_rotation = np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
     top_side_signs = getattr(state, "first_route_arm_top_side_signs", None)
-    if not isinstance(top_side_signs, dict) or arm not in top_side_signs:
-        return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+    if isinstance(top_side_signs, dict) and arm in top_side_signs:
+        top_side_sign = 1.0 if float(top_side_signs[arm]) >= 0.0 else -1.0
+    else:
+        top_side_sign = 1.0 if float(np.dot(fallback_rotation[:, 1], np.array([0.0, 0.0, 1.0]))) >= 0.0 else -1.0
 
     board_z = np.asarray(plane.normal, dtype=float).reshape(3)
     board_z /= np.linalg.norm(board_z) + 1e-9
@@ -98,10 +106,9 @@ def _board_normal_first_route_rotation(
     to_clip = clip_center - np.asarray(position_world, dtype=float).reshape(3)
     to_clip = to_clip - float(np.dot(to_clip, tool_z)) * tool_z
     if float(np.linalg.norm(to_clip)) < 1e-6:
-        return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+        return fallback_rotation
     top_axis_world = to_clip / (np.linalg.norm(to_clip) + 1e-9)
 
-    top_side_sign = 1.0 if float(top_side_signs[arm]) >= 0.0 else -1.0
     tool_y = top_axis_world * top_side_sign
     tool_x = np.cross(tool_y, tool_z)
     tool_x /= np.linalg.norm(tool_x) + 1e-9
@@ -118,8 +125,9 @@ def _first_route_rotation_for_arm(
     plane: Any,
     fallback_pose: Dict[str, Any],
 ) -> np.ndarray:
-    if arm == getattr(state, "descend_second_arm", None):
-        return _board_normal_first_route_rotation(
+    align_targets = bool(getattr(state.config, "first_route_align_targets_to_board_normal", True))
+    if align_targets or arm == getattr(state, "descend_second_arm", None):
+        rotation = _board_normal_first_route_rotation(
             state,
             arm,
             position_world,
@@ -127,7 +135,13 @@ def _first_route_rotation_for_arm(
             plane,
             fallback_pose,
         )
-    return np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+    else:
+        rotation = np.asarray(fallback_pose["rotation"], dtype=float).reshape(3, 3)
+
+    flip_primary = bool(getattr(state.config, "first_route_flip_primary_tool_z_180", True))
+    if flip_primary and arm == getattr(state, "current_primary_arm", None):
+        rotation = _rotate_about_tool_z_180(rotation)
+    return rotation
 
 
 def build_first_route_execution_poses(
