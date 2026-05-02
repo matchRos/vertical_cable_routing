@@ -3,7 +3,7 @@ from typing import Dict, List
 import numpy as np
 import rospy
 import tf
-from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import PoseArray, PoseStamped
 from scipy.spatial.transform import Rotation as R
 
 from cable_core.planes import get_routing_plane
@@ -21,6 +21,8 @@ class ExecuteNextPegRouteStep(BaseStep):
             rospy.init_node("cable_studio_execute_next_peg_route", anonymous=True)
         self.pub_left = rospy.Publisher("/yumi/robl/moveit_waypoints", PoseArray, queue_size=1)
         self.pub_right = rospy.Publisher("/yumi/robr/moveit_waypoints", PoseArray, queue_size=1)
+        self.pub_left_pose = rospy.Publisher("/yumi/robl/moveit_target_pose", PoseStamped, queue_size=1)
+        self.pub_right_pose = rospy.Publisher("/yumi/robr/moveit_target_pose", PoseStamped, queue_size=1)
         self.tf_listener = tf.TransformListener()
 
     def _target_plane_distance_delta(self, state) -> float:
@@ -70,6 +72,18 @@ class ExecuteNextPegRouteStep(BaseStep):
             self.pub_left.publish(msg)
         else:
             self.pub_right.publish(msg)
+
+    def _publish_pose(self, arm: str, msg: PoseStamped) -> None:
+        msg.header.stamp = rospy.Time.now()
+        if arm == "left":
+            self.pub_left_pose.publish(msg)
+        else:
+            self.pub_right_pose.publish(msg)
+
+    def _pose_stamped_from_waypoint(self, state, waypoint: dict) -> PoseStamped:
+        msg, _ = pose_to_msg(waypoint["position"], waypoint["rotation"], config=state.config)
+        msg.header.stamp = rospy.Time.now()
+        return msg
 
     def _plane_coord(self, point, origin, axis_x, axis_y) -> List[float]:
         pos = np.asarray(point, dtype=float).reshape(3)
@@ -369,6 +383,33 @@ class ExecuteNextPegRouteStep(BaseStep):
                 rospy.sleep(pause_s)
         return {"stepwise": True, "steps": results}
 
+    def _preposition_first_waypoint(self, state, arm: str, waypoint: dict) -> dict:
+        pose_msg = self._pose_stamped_from_waypoint(state, waypoint)
+        target_pos, target_quat = self._pose_from_msg(pose_msg.pose)
+        current_pos, current_quat, current_frame = self._current_pose(state, arm, pose_msg.header.frame_id)
+        rospy.logwarn(
+            "[execute_next_peg_route] preposition first waypoint target %s frame=%s",
+            self._pose_text(target_pos, target_quat),
+            pose_msg.header.frame_id,
+        )
+        rospy.logwarn(
+            "[execute_next_peg_route] preposition current_before %s frame=%s",
+            self._pose_text(current_pos, current_quat),
+            current_frame,
+        )
+        self._publish_pose(arm, pose_msg)
+        result = wait_for_moveit_motion_result([arm])
+        arrived_pos, arrived_quat, arrived_frame = self._current_pose(state, arm, pose_msg.header.frame_id)
+        pos_err = float(np.linalg.norm(arrived_pos - target_pos)) if np.all(np.isfinite(arrived_pos)) else float("nan")
+        rospy.logwarn(
+            "[execute_next_peg_route] preposition arrived %s frame=%s pos_err=%.4f status=%s",
+            self._pose_text(arrived_pos, arrived_quat),
+            arrived_frame,
+            pos_err,
+            result.get("status", {}).get(arm),
+        )
+        return result
+
     def run(self, state) -> Dict[str, object]:
         plan = getattr(state, "peg_route_plan", None)
         if not plan:
@@ -416,8 +457,47 @@ class ExecuteNextPegRouteStep(BaseStep):
             pause_s = max(0.0, float(getattr(state.config, "execute_next_peg_route_pause_s", 0.2)))
             motion_result = self._execute_stepwise(state, arm, msg, pause_s)
         else:
+            preposition_result = None
+            if bool(getattr(state.config, "execute_next_peg_route_preposition_first_waypoint", False)):
+                preposition_result = self._preposition_first_waypoint(state, arm, execution_waypoints[0])
             self._publish_pose_array(arm, msg)
             motion_result = wait_for_moveit_motion_result([arm])
+            if preposition_result is not None:
+                motion_result = {
+                    "preposition": preposition_result,
+                    "waypoints": motion_result,
+                }
+        debug_partial = bool(getattr(state.config, "execute_next_peg_route_debug_partial_execution", False))
+        if debug_partial and not stepwise:
+            current_pos, current_quat, current_frame = self._current_pose(
+                state,
+                arm,
+                msg.header.frame_id,
+            )
+            if getattr(state, "current_arm_poses_world", None) is None:
+                state.current_arm_poses_world = {}
+            if np.all(np.isfinite(current_pos)) and np.all(np.isfinite(current_quat)):
+                state.current_arm_poses_world[arm] = {
+                    "position": current_pos,
+                    "rotation": R.from_quat(current_quat).as_matrix(),
+                }
+            rospy.logwarn(
+                "[execute_next_peg_route] debug partial execution enabled; "
+                "not marking peg route complete and not advancing route index. "
+                "current_after %s frame=%s",
+                self._pose_text(current_pos, current_quat),
+                current_frame,
+            )
+            return {
+                "executed": False,
+                "route_complete": False,
+                "debug_partial_execution": True,
+                "arm": arm,
+                "waypoint_count": len(waypoints),
+                "curr_clip_idx": plan["curr_clip_idx"],
+                "motion_result": motion_result,
+                "current_after_position": np.asarray(current_pos, dtype=float).reshape(3).tolist(),
+            }
         last_pose = execution_waypoints[-1]
         if getattr(state, "current_arm_poses_world", None) is None:
             state.current_arm_poses_world = {}

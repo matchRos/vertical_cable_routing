@@ -169,6 +169,8 @@ class DebugConfig:
     peg_route_lateral_tolerance_m: float = 0.01
     execute_next_peg_route_dry_run: bool = False
     execute_next_peg_route_stepwise: bool = False
+    execute_next_peg_route_preposition_first_waypoint: bool = False
+    execute_next_peg_route_debug_partial_execution: bool = True
     execute_next_peg_route_pause_s: float = 0.2
     execute_next_peg_route_min_plane_distance_m: Optional[float] = None
     execute_next_peg_route_plane_distance_tolerance_m: float = 0.005

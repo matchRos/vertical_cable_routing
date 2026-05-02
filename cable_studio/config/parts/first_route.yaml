@@ -19,6 +19,8 @@ peg_route_lateral_tolerance_m: 0.01
 
 execute_next_peg_route_dry_run: false
 execute_next_peg_route_stepwise: false
+execute_next_peg_route_preposition_first_waypoint: false
+execute_next_peg_route_debug_partial_execution: true
 execute_next_peg_route_pause_s: 0.2
 execute_next_peg_route_min_plane_distance_m: null
 execute_next_peg_route_plane_distance_tolerance_m: 0.005
