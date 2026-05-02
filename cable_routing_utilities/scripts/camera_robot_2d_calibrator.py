@@ -34,6 +34,10 @@ class CameraRobot2DCalibrator:
         self.h_high = rospy.get_param("~h_high", 40)
         self.s_high = rospy.get_param("~s_high", 255)
         self.v_high = rospy.get_param("~v_high", 255)
+        self.use_ransac = rospy.get_param("~use_ransac", True)
+        self.ransac_threshold_m = rospy.get_param("~ransac_threshold_m", 0.01)
+        self.ransac_max_iters = rospy.get_param("~ransac_max_iters", 10000)
+        self.ransac_confidence = rospy.get_param("~ransac_confidence", 0.999)
 
         self.bridge = CvBridge()
         self.tf_listener = tf.TransformListener()
@@ -55,6 +59,7 @@ class CameraRobot2DCalibrator:
 
         self.affine_matrix = None  # 2x3
         self.homography_matrix = None  # 3x3
+        self.homography_inlier_mask = None
 
         self.window_name = "Camera-Robot 2D Calibration"
 
@@ -240,12 +245,36 @@ class CameraRobot2DCalibrator:
         src = np.array(self.pixel_points, dtype=np.float32).reshape(-1, 1, 2)
         dst = np.array(self.robot_points, dtype=np.float32).reshape(-1, 1, 2)
 
-        H, mask = cv2.findHomography(src, dst, method=0)
+        method = cv2.RANSAC if self.use_ransac else 0
+        H, mask = cv2.findHomography(
+            src,
+            dst,
+            method=method,
+            ransacReprojThreshold=float(self.ransac_threshold_m),
+            maxIters=int(self.ransac_max_iters),
+            confidence=float(self.ransac_confidence),
+        )
         if H is None:
             rospy.logwarn("Homography fit failed.")
             return None
 
         self.homography_matrix = H
+        self.homography_inlier_mask = (
+            mask.reshape(-1).astype(bool) if mask is not None else None
+        )
+        if self.homography_inlier_mask is not None:
+            n_in = int(np.count_nonzero(self.homography_inlier_mask))
+            n_total = int(len(self.homography_inlier_mask))
+            rospy.loginfo(
+                "Homography RANSAC inliers: %d/%d (threshold %.3f m)",
+                n_in,
+                n_total,
+                float(self.ransac_threshold_m),
+            )
+            if n_in < 4:
+                rospy.logwarn(
+                    "Homography has fewer than 4 inliers. Calibration is not reliable."
+                )
         return H
 
     def apply_homography(self, uv):
@@ -280,8 +309,69 @@ class CameraRobot2DCalibrator:
                 float(np.mean(err_h)),
                 float(np.max(err_h)),
             )
+            mask = self.homography_inlier_mask
+            if mask is not None and len(mask) == len(err_h):
+                in_err = err_h[mask]
+                out_idx = np.where(~mask)[0]
+                if len(in_err) > 0:
+                    rospy.loginfo(
+                        "Homography inlier mean error: %.6f m | max error: %.6f m",
+                        float(np.mean(in_err)),
+                        float(np.max(in_err)),
+                    )
+                if len(out_idx) > 0:
+                    rospy.logwarn(
+                        "Homography outlier sample numbers: %s",
+                        ", ".join(str(int(i) + 1) for i in out_idx),
+                    )
+
+            worst = np.argsort(err_h)[::-1][: min(10, len(err_h))]
+            rospy.loginfo("Worst homography samples:")
+            for idx in worst:
+                rospy.loginfo(
+                    "  #%d err=%.3f mm pixel=(%.1f, %.1f) robot_yz=(%.5f, %.5f)",
+                    int(idx) + 1,
+                    float(err_h[idx]) * 1000.0,
+                    float(src[idx, 0]),
+                    float(src[idx, 1]),
+                    float(dst[idx, 0]),
+                    float(dst[idx, 1]),
+                )
+
+    def remove_homography_outliers(self):
+        if self.homography_inlier_mask is None:
+            rospy.logwarn("No homography inlier mask available. Press 'f' first.")
+            return
+        if len(self.homography_inlier_mask) != len(self.pixel_points):
+            rospy.logwarn("Inlier mask length does not match sample count. Press 'f' again.")
+            return
+
+        outlier_numbers = [
+            str(i + 1) for i, keep in enumerate(self.homography_inlier_mask) if not keep
+        ]
+        if not outlier_numbers:
+            rospy.loginfo("No homography outliers to remove.")
+            return
+
+        self.pixel_points = [
+            p for p, keep in zip(self.pixel_points, self.homography_inlier_mask) if keep
+        ]
+        self.robot_points = [
+            p for p, keep in zip(self.robot_points, self.homography_inlier_mask) if keep
+        ]
+        self.affine_matrix = None
+        self.homography_matrix = None
+        self.homography_inlier_mask = None
+        rospy.logwarn(
+            "Removed homography outlier sample numbers: %s. Press 'f' again to refit.",
+            ", ".join(outlier_numbers),
+        )
 
     def save_yaml(self):
+        if self.homography_matrix is None:
+            rospy.logwarn("No homography fitted. Press 'f' before writing YAML.")
+            return
+
         data = {
             "base_frame": self.base_frame,
             "tcp_frame": self.tcp_frame,
@@ -297,6 +387,15 @@ class CameraRobot2DCalibrator:
             },
             "pixel_points": self.pixel_points,
             "robot_yz_points": self.robot_points,
+            "homography_ransac": {
+                "enabled": bool(self.use_ransac),
+                "threshold_m": float(self.ransac_threshold_m),
+                "inlier_mask": (
+                    self.homography_inlier_mask.astype(int).tolist()
+                    if self.homography_inlier_mask is not None
+                    else None
+                ),
+            },
             "affine_matrix_2x3": (
                 self.affine_matrix.tolist() if self.affine_matrix is not None else None
             ),
@@ -312,11 +411,87 @@ class CameraRobot2DCalibrator:
 
         rospy.loginfo("Calibration saved to: %s", os.path.abspath(self.output_yaml))
 
+    def load_yaml(self):
+        if not os.path.isfile(self.output_yaml):
+            rospy.logwarn("Calibration YAML not found: %s", os.path.abspath(self.output_yaml))
+            return
+
+        with open(self.output_yaml, "r") as f:
+            data = yaml.safe_load(f)
+
+        if not isinstance(data, dict):
+            rospy.logwarn("Calibration YAML does not contain a mapping: %s", self.output_yaml)
+            return
+
+        pixel_points = data.get("pixel_points")
+        robot_points = data.get("robot_yz_points")
+        if pixel_points is None or robot_points is None:
+            rospy.logwarn("Calibration YAML is missing pixel_points or robot_yz_points.")
+            return
+        if len(pixel_points) != len(robot_points):
+            rospy.logwarn(
+                "Calibration YAML has mismatched point counts: %d pixel vs %d robot.",
+                len(pixel_points),
+                len(robot_points),
+            )
+            return
+
+        self.pixel_points = [
+            [float(p[0]), float(p[1])] for p in pixel_points
+        ]
+        self.robot_points = [
+            [float(p[0]), float(p[1])] for p in robot_points
+        ]
+
+        roi = data.get("roi")
+        if roi is not None and len(roi) == 4:
+            self.roi = tuple(int(x) for x in roi)
+            self.roi_defined = True
+
+        hsv = data.get("hsv_thresholds") or {}
+        self.h_low = int(hsv.get("h_low", self.h_low))
+        self.s_low = int(hsv.get("s_low", self.s_low))
+        self.v_low = int(hsv.get("v_low", self.v_low))
+        self.h_high = int(hsv.get("h_high", self.h_high))
+        self.s_high = int(hsv.get("s_high", self.s_high))
+        self.v_high = int(hsv.get("v_high", self.v_high))
+
+        affine = data.get("affine_matrix_2x3")
+        self.affine_matrix = (
+            np.asarray(affine, dtype=np.float64).reshape(2, 3)
+            if affine is not None
+            else None
+        )
+
+        homography = data.get("homography_matrix_3x3")
+        self.homography_matrix = (
+            np.asarray(homography, dtype=np.float64).reshape(3, 3)
+            if homography is not None
+            else None
+        )
+
+        ransac = data.get("homography_ransac") or {}
+        mask = ransac.get("inlier_mask")
+        self.homography_inlier_mask = (
+            np.asarray(mask, dtype=bool)
+            if mask is not None and len(mask) == len(self.pixel_points)
+            else None
+        )
+
+        rospy.loginfo(
+            "Loaded %d calibration samples from: %s",
+            len(self.pixel_points),
+            os.path.abspath(self.output_yaml),
+        )
+        if self.homography_matrix is not None:
+            self.compute_errors()
+
     def clear_samples(self):
         self.pixel_points = []
         self.robot_points = []
         self.affine_matrix = None
         self.homography_matrix = None
+        self.homography_inlier_mask = None
         rospy.loginfo("All samples and fitted models cleared.")
 
     def draw_overlay(self, image):
@@ -367,6 +542,8 @@ class CameraRobot2DCalibrator:
             "r = reset ROI",
             "s = save sample",
             "f = fit affine + homography",
+            "o = remove homography outliers",
+            "l = load YAML",
             "w = write YAML",
             "c = clear samples",
             "q = quit",
@@ -423,6 +600,12 @@ class CameraRobot2DCalibrator:
                     rospy.loginfo("Homography matrix:\n%s", str(H))
 
                 self.compute_errors()
+
+            elif key == ord("o"):
+                self.remove_homography_outliers()
+
+            elif key == ord("l"):
+                self.load_yaml()
 
             elif key == ord("w"):
                 self.save_yaml()
